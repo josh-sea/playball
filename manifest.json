@@ -1,0 +1,26 @@
+{
+  "name": "Timed Playlist Editor",
+  "short_name": "Timed Playlist",
+  "description": "Build Spotify playlists with precise start and stop times per track",
+  "start_url": "/playball/",
+  "scope": "/playball/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0d0d0d",
+  "theme_color": "#1db954",
+  "categories": ["music", "entertainment"],
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
