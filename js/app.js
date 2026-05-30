@@ -1,6 +1,6 @@
 'use strict';
 
-// ── State ────────────────────────────────────────────────────────────────────
+// ── State ──────────────────────────────────────────────────────────────────
 const S = {
   user:        null,
   playlists:   [],
@@ -21,7 +21,7 @@ const S = {
 
 const isMobile = () => window.innerWidth <= 640;
 
-// ── DOM helpers ───────────────────────────────────────────────────────────────
+// ── DOM helpers ────────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
 
 function msToTime(ms) {
@@ -48,19 +48,19 @@ function esc(str) {
   return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-// ── Mobile tab switching ───────────────────────────────────────────────────────
+// ── Mobile tab switching ───────────────────────────────────────────────────
 function switchTab(tab) {
   S.mobileTab = tab;
   const map = { library: '.sidebar', editor: '.editor', playing: '.mobile-playing' };
-  Object.entries(map).forEach(([t, sel]) => {
-    document.querySelector(sel)?.classList.toggle('mob-active', t === tab);
-  });
+  Object.entries(map).forEach(([t, sel]) =>
+    document.querySelector(sel)?.classList.toggle('mob-active', t === tab)
+  );
   document.querySelectorAll('.mnav-btn').forEach(btn =>
     btn.classList.toggle('active', btn.dataset.tab === tab)
   );
 }
 
-// ── Playlist helpers ──────────────────────────────────────────────────────────
+// ── Playlist helpers ───────────────────────────────────────────────────────
 function currentPlaylist() { return S.playlists[S.activeIdx] || null; }
 
 function trackFromSpotify(t) {
@@ -76,7 +76,7 @@ function trackFromSpotify(t) {
   };
 }
 
-// ── Render: sidebar ───────────────────────────────────────────────────────────
+// ── Render: sidebar ────────────────────────────────────────────────────────
 function renderSidebar() {
   const el = $('playlist-list');
   if (!S.playlists.length) {
@@ -94,7 +94,7 @@ function renderSidebar() {
   );
 }
 
-// ── Render: editor ────────────────────────────────────────────────────────────
+// ── Render: editor ─────────────────────────────────────────────────────────
 function renderEditor() {
   const pl = currentPlaylist();
   if (!pl) {
@@ -159,13 +159,13 @@ function renderEditor() {
 }
 
 function onTimeChange(e) {
-  const inp  = e.target;
-  const i    = +inp.dataset.i;
+  const inp   = e.target;
+  const i     = +inp.dataset.i;
   const field = inp.dataset.f;
-  const pl   = currentPlaylist();
+  const pl    = currentPlaylist();
   if (!pl) return;
-  const t = pl.tracks[i];
-  let ms = timeToMs(inp.value);
+  const t  = pl.tracks[i];
+  let ms   = timeToMs(inp.value);
   if (field === 'start_ms') ms = Math.max(0, Math.min(ms, t.end_ms - 1000));
   else                      ms = Math.max(t.start_ms + 1000, Math.min(ms, t.duration_ms));
   t[field]  = ms;
@@ -192,7 +192,7 @@ function removeTrack(i) {
   renderSidebar();
 }
 
-// ── Player ────────────────────────────────────────────────────────────────────
+// ── Player ─────────────────────────────────────────────────────────────────
 async function initSDK() {
   return new Promise((resolve, reject) => {
     window.onSpotifyWebPlaybackSDKReady = async () => {
@@ -232,10 +232,10 @@ async function playAt(i) {
   clearTimeout(S.stopTimer);
   clearInterval(S.progTimer);
 
-  const track = pl.tracks[i];
-  S.nowIdx   = i;
-  S.segStart = track.start_ms;
-  S.segEnd   = track.end_ms;
+  const track  = pl.tracks[i];
+  S.nowIdx     = i;
+  S.segStart   = track.start_ms;
+  S.segEnd     = track.end_ms;
   const segDur = S.segEnd - S.segStart;
 
   try {
@@ -249,30 +249,79 @@ async function playAt(i) {
   syncPPBtns();
   syncPlayerUI(track);
   renderEditor();
-
   if (isMobile()) switchTab('playing');
 
-  const wallStart = Date.now();
+  _startProgressTimer(S.segStart, segDur, pl);
+}
+
+function _startProgressTimer(fromMs, segDur, pl) {
+  clearInterval(S.progTimer);
+  clearTimeout(S.stopTimer);
+  const wallStart  = Date.now();
+  const remaining  = S.segEnd - fromMs;
+
   S.progTimer = setInterval(() => {
     const elapsed = Date.now() - wallStart;
-    const pct = Math.min(100, (elapsed / segDur) * 100);
-    const cur  = msToTime(S.segStart + elapsed);
-    // Desktop
+    const ms      = fromMs + elapsed;
+    const pct     = Math.min(100, ((ms - S.segStart) / segDur) * 100);
+    const label   = msToTime(ms);
     $('pb-fill').style.width = pct + '%';
-    $('pb-cur').textContent  = cur;
-    // Mobile
     $('mp-fill').style.width = pct + '%';
-    $('mp-cur').textContent  = cur;
+    $('pb-cur').textContent  = label;
+    $('mp-cur').textContent  = label;
   }, 200);
 
   S.stopTimer = setTimeout(async () => {
     clearInterval(S.progTimer);
-    if (S.nowIdx < pl.tracks.length - 1) {
+    if (S.nowIdx < (pl?.tracks.length ?? 0) - 1) {
       await playAt(S.nowIdx + 1);
     } else {
       await stopPlayback();
     }
-  }, segDur);
+  }, remaining);
+}
+
+// Seek to any ms position within the full track; restarts segment timer from there
+async function seekTo(posMs) {
+  clearTimeout(S.stopTimer);
+  clearInterval(S.progTimer);
+  if (!S.sdkPlayer) return;
+
+  const pl    = currentPlaylist();
+  const track = pl?.tracks[S.nowIdx];
+  if (!track) return;
+
+  await S.sdkPlayer.seek(posMs);
+
+  const segDur = S.segEnd - S.segStart;
+
+  // Resume progress timer from seeked position
+  const wallStart = Date.now();
+  S.progTimer = setInterval(() => {
+    const elapsed = Date.now() - wallStart;
+    const ms  = posMs + elapsed;
+    const pct = Math.min(100, ((ms - S.segStart) / segDur) * 100);
+    $('pb-fill').style.width = pct + '%';
+    $('mp-fill').style.width = pct + '%';
+    $('pb-cur').textContent  = msToTime(ms);
+    $('mp-cur').textContent  = msToTime(ms);
+  }, 200);
+
+  const remaining = S.segEnd - posMs;
+  if (remaining > 0) {
+    S.stopTimer = setTimeout(async () => {
+      clearInterval(S.progTimer);
+      if (S.nowIdx < (pl?.tracks.length ?? 0) - 1) {
+        await playAt(S.nowIdx + 1);
+      } else {
+        await stopPlayback();
+      }
+    }, remaining);
+  } else {
+    // Dragged past end — advance now
+    if (S.nowIdx < (pl?.tracks.length ?? 0) - 1) playAt(S.nowIdx + 1);
+    else stopPlayback();
+  }
 }
 
 async function stopPlayback() {
@@ -289,8 +338,7 @@ async function stopPlayback() {
 
 async function togglePlayback() {
   if (S.playing) {
-    clearTimeout(S.stopTimer);
-    clearInterval(S.progTimer);
+    clearTimeout(S.stopTimer); clearInterval(S.progTimer);
     if (S.sdkPlayer) await S.sdkPlayer.pause();
     S.playing = false; syncPPBtns();
   } else if (S.nowIdx >= 0) {
@@ -308,33 +356,95 @@ function syncPPBtns() {
 }
 
 function syncPlayerUI(track) {
-  // Desktop bar
-  $('pb-art').src            = track.image;
-  $('pb-name').textContent   = track.name;
-  $('pb-artist').textContent = track.artist;
-  $('pb-end').textContent    = msToTime(track.end_ms);
+  $('pb-art').src             = track.image;
+  $('pb-name').textContent    = track.name;
+  $('pb-artist').textContent  = track.artist;
+  $('pb-end').textContent     = msToTime(track.end_ms);
   $('pb-segment').textContent = msToTime(track.start_ms) + ' → ' + msToTime(track.end_ms);
   $('player-bar').classList.remove('hidden');
 
-  // Mobile now-playing panel
   const art = $('mp-art');
   art.src = track.image;
-  art.classList.remove('pulse');
-  void art.offsetWidth; // reflow to restart animation
-  art.classList.add('pulse');
-
+  art.classList.remove('pulse'); void art.offsetWidth; art.classList.add('pulse');
   $('mp-name').textContent   = track.name;
   $('mp-artist').textContent = track.artist;
   $('mp-pl').textContent     = currentPlaylist()?.name || '';
   $('mp-seg').textContent    = msToTime(track.start_ms) + ' → ' + msToTime(track.end_ms);
   $('mp-end').textContent    = msToTime(track.end_ms);
-
-  // Show track content, hide idle
   $('mp-idle').classList.add('hidden');
   $('mp-track').classList.remove('hidden');
 }
 
-// ── Search ────────────────────────────────────────────────────────────────────
+// ── Scrubbing ──────────────────────────────────────────────────────────────
+function initScrubbing() {
+  // Both desktop bar and mobile bar
+  const bars = [
+    $('pb-scrub'),  // desktop
+    $('mp-scrub'),  // mobile now-playing
+  ].filter(Boolean);
+
+  let dragging  = false;
+  let activeBar = null;
+
+  function pctAt(bar, e) {
+    const touch = e.touches?.[0] || e.changedTouches?.[0];
+    const x = (touch ? touch.clientX : e.clientX) - bar.getBoundingClientRect().left;
+    return Math.max(0, Math.min(1, x / bar.offsetWidth));
+  }
+
+  function pctToMs(pct) {
+    // Map 0–1 within the segment (start_ms → end_ms)
+    return Math.round(S.segStart + pct * (S.segEnd - S.segStart));
+  }
+
+  function updateVisuals(pct) {
+    const ms = pctToMs(pct);
+    const t  = msToTime(ms);
+    $('pb-fill').style.width = (pct * 100) + '%';
+    $('mp-fill').style.width = (pct * 100) + '%';
+    $('pb-cur').textContent  = t;
+    $('mp-cur').textContent  = t;
+  }
+
+  bars.forEach(bar => {
+    bar.addEventListener('mousedown', e => {
+      if (S.nowIdx < 0) return;
+      dragging = true; activeBar = bar;
+      clearInterval(S.progTimer); // pause ticker while dragging
+      bar.classList.add('scrubbing');
+      updateVisuals(pctAt(bar, e));
+      e.preventDefault();
+    });
+    bar.addEventListener('touchstart', e => {
+      if (S.nowIdx < 0) return;
+      dragging = true; activeBar = bar;
+      clearInterval(S.progTimer);
+      bar.classList.add('scrubbing');
+      updateVisuals(pctAt(bar, e));
+    }, { passive: true });
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (!dragging || !activeBar) return;
+    updateVisuals(pctAt(activeBar, e));
+  });
+  document.addEventListener('touchmove', e => {
+    if (!dragging || !activeBar) return;
+    updateVisuals(pctAt(activeBar, e));
+  }, { passive: true });
+
+  const onEnd = e => {
+    if (!dragging || !activeBar) return;
+    const pct = pctAt(activeBar, e);
+    activeBar.classList.remove('scrubbing');
+    dragging = false; activeBar = null;
+    seekTo(pctToMs(pct));
+  };
+  document.addEventListener('mouseup',  onEnd);
+  document.addEventListener('touchend', onEnd);
+}
+
+// ── Search ─────────────────────────────────────────────────────────────────
 async function doSearch(q) {
   if (!q.trim()) { $('search-results').classList.add('hidden'); return; }
   try {
@@ -347,8 +457,7 @@ function renderSearchResults(tracks) {
   const el = $('search-results');
   if (!tracks.length) {
     el.innerHTML = '<p class="hint" style="padding:14px">No results.</p>';
-    el.classList.remove('hidden');
-    return;
+    el.classList.remove('hidden'); return;
   }
   el.innerHTML = tracks.map(t => {
     const img  = t.album?.images?.[2]?.url || t.album?.images?.[0]?.url || '';
@@ -363,17 +472,13 @@ function renderSearchResults(tracks) {
         </div>
         <span class="sr-dur">${msToTime(t.duration_ms)}</span>
         <button class="sr-add" data-track="${data}">Add</button>
-      </div>
-    `;
+      </div>`;
   }).join('');
-
   el.querySelectorAll('.sr-add').forEach(btn => {
     btn.addEventListener('click', e => {
       e.stopPropagation();
-      const track = JSON.parse(btn.dataset.track.replace(/&quot;/g, '"'));
-      addTrack(track);
-      btn.textContent = '✓';
-      btn.style.background = '#555';
+      addTrack(JSON.parse(btn.dataset.track.replace(/&quot;/g, '"')));
+      btn.textContent = '✓'; btn.style.background = '#555';
       setTimeout(() => { btn.textContent = 'Add'; btn.style.background = ''; }, 1500);
     });
   });
@@ -383,29 +488,81 @@ function renderSearchResults(tracks) {
 function addTrack(track) {
   if (!currentPlaylist()) createPlaylist();
   currentPlaylist().tracks.push(track);
-  renderEditor();
-  renderSidebar();
+  renderEditor(); renderSidebar();
   if (isMobile()) switchTab('editor');
 }
 
-// ── Playlist CRUD ─────────────────────────────────────────────────────────────
+// ── Spotify playlist import ────────────────────────────────────────────────
+async function openImportModal() {
+  $('import-modal').classList.remove('hidden');
+  $('import-list').innerHTML = '<p class="hint" style="padding:20px">Loading your Spotify playlists…</p>';
+  try {
+    const playlists = await SpotifyAuth.getUserPlaylists();
+    renderImportList(playlists);
+  } catch (e) {
+    $('import-list').innerHTML =
+      `<p class="hint" style="padding:20px;color:var(--danger)">Error: ${esc(e.message)}</p>`;
+  }
+}
+
+function renderImportList(playlists) {
+  if (!playlists.length) {
+    $('import-list').innerHTML = '<p class="hint" style="padding:20px">No playlists found.</p>';
+    return;
+  }
+  $('import-list').innerHTML = playlists.map(pl => {
+    const img   = pl.images?.[0]?.url || '';
+    const count = pl.tracks?.total ?? 0;
+    return `
+      <div class="import-pl-item" data-id="${pl.id}" data-name="${esc(pl.name)}">
+        ${img
+          ? `<img class="import-pl-img" src="${img}" alt="" loading="lazy" />`
+          : `<div class="import-pl-img import-pl-img--empty"></div>`
+        }
+        <div class="import-pl-info">
+          <div class="import-pl-name">${esc(pl.name)}</div>
+          <div class="import-pl-meta">${count} track${count !== 1 ? 's' : ''}</div>
+        </div>
+        <span class="import-pl-arrow">›</span>
+      </div>`;
+  }).join('');
+  $('import-list').querySelectorAll('.import-pl-item').forEach(el =>
+    el.addEventListener('click', () => importPlaylist(el.dataset.id, el.dataset.name))
+  );
+}
+
+async function importPlaylist(spotifyId, name) {
+  $('import-list').innerHTML =
+    '<p class="hint" style="padding:20px">Importing tracks…</p>';
+  try {
+    const raw    = await SpotifyAuth.getPlaylistTracks(spotifyId);
+    const tracks = raw.map(t => trackFromSpotify(t));
+    S.playlists.push({ name, tracks, path: null, sha: null, created: new Date().toISOString() });
+    S.activeIdx = S.playlists.length - 1;
+    $('import-modal').classList.add('hidden');
+    renderSidebar(); renderEditor();
+    if (isMobile()) switchTab('editor');
+    toast(`Imported "${name}" — ${tracks.length} tracks`, 'success');
+  } catch (e) {
+    $('import-list').innerHTML =
+      `<p class="hint" style="padding:20px;color:var(--danger)">Error: ${esc(e.message)}</p>`;
+  }
+}
+
+function closeImportModal() { $('import-modal').classList.add('hidden'); }
+
+// ── Playlist CRUD ──────────────────────────────────────────────────────────
 function createPlaylist() {
   S.playlists.push({ name: 'New Playlist', tracks: [], path: null, sha: null, created: new Date().toISOString() });
   S.activeIdx = S.playlists.length - 1;
-  renderSidebar();
-  renderEditor();
-  if (isMobile()) {
-    switchTab('editor');
-  } else {
-    $('playlist-name').focus();
-    $('playlist-name').select();
-  }
+  renderSidebar(); renderEditor();
+  if (isMobile()) switchTab('editor');
+  else { $('playlist-name').focus(); $('playlist-name').select(); }
 }
 
 function openPlaylist(i) {
   S.activeIdx = i;
-  renderSidebar();
-  renderEditor();
+  renderSidebar(); renderEditor();
   if (isMobile()) switchTab('editor');
 }
 
@@ -413,17 +570,14 @@ async function savePlaylist() {
   if (!GitHub.hasToken()) { toast('Enter a GitHub token to save playlists.', 'error'); return; }
   const pl = currentPlaylist();
   if (!pl || !S.user) return;
-
   pl.name    = $('playlist-name').value.trim() || 'Untitled';
   pl.updated = new Date().toISOString();
-
-  const btn = $('save-btn');
+  const btn  = $('save-btn');
   btn.disabled = true; btn.textContent = 'Saving…';
   try {
-    const data = { name: pl.name, owner: S.user.id, created: pl.created, updated: pl.updated, tracks: pl.tracks };
-    pl.path = await GitHub.savePlaylist(S.user.id, pl.name, data);
-    toast('Saved to repo!', 'success');
-    renderSidebar();
+    pl.path = await GitHub.savePlaylist(S.user.id, pl.name,
+      { name: pl.name, owner: S.user.id, created: pl.created, updated: pl.updated, tracks: pl.tracks });
+    toast('Saved to repo!', 'success'); renderSidebar();
   } catch (e) {
     toast('Save failed: ' + e.message, 'error');
   } finally {
@@ -440,8 +594,7 @@ async function deletePlaylist() {
   }
   S.playlists.splice(S.activeIdx, 1);
   S.activeIdx = -1;
-  renderSidebar();
-  renderEditor();
+  renderSidebar(); renderEditor();
   toast('Playlist deleted.');
 }
 
@@ -451,8 +604,7 @@ async function loadSavedPlaylists() {
     const files  = await GitHub.listPlaylists(S.user.id);
     const loaded = (await Promise.all(files.map(f => GitHub.loadPlaylist(f.path)))).filter(Boolean);
     const remote = loaded.map(({ playlist, sha }, idx) => ({ ...playlist, path: files[idx].path, sha }));
-    const local  = S.playlists.filter(p => !p.path);
-    S.playlists  = [...remote, ...local];
+    S.playlists  = [...remote, ...S.playlists.filter(p => !p.path)];
     renderSidebar();
     const gs = $('gh-status');
     gs.textContent = `✓ GitHub connected · ${remote.length} playlist${remote.length !== 1 ? 's' : ''} saved`;
@@ -469,20 +621,12 @@ async function applyGhToken(token) {
   GitHub.saveToken(token);
   try {
     const login = await GitHub.verifyToken();
-    if (login) {
-      toast(`GitHub: connected as @${login}`, 'success');
-      if (S.user) loadSavedPlaylists();
-    } else {
-      toast('GitHub token invalid.', 'error');
-      GitHub.clearToken();
-    }
-  } catch (e) {
-    toast('GitHub token error: ' + e.message, 'error');
-    GitHub.clearToken();
-  }
+    if (login) { toast(`GitHub: connected as @${login}`, 'success'); if (S.user) loadSavedPlaylists(); }
+    else { toast('GitHub token invalid.', 'error'); GitHub.clearToken(); }
+  } catch (e) { toast('GitHub token error: ' + e.message, 'error'); GitHub.clearToken(); }
 }
 
-// ── App init ───────────────────────────────────────────────────────────────────
+// ── App init ───────────────────────────────────────────────────────────────
 async function launchApp() {
   $('auth-overlay').classList.add('hidden');
   $('app').classList.remove('hidden');
@@ -490,10 +634,8 @@ async function launchApp() {
   S.user = await SpotifyAuth.getUser();
   $('user-display').textContent = S.user.display_name || S.user.id;
 
-  // Default mobile tab
   if (isMobile()) switchTab('editor');
 
-  // GitHub token
   const savedTok = GitHub.getToken();
   if (savedTok) {
     $('gh-token-input').value = savedTok;
@@ -503,12 +645,9 @@ async function launchApp() {
     $('gh-status').textContent = 'No GitHub token — playlists won\'t be saved.';
   }
 
-  // Spotify SDK
   initSDK()
-    .then(() => toast('Player ready', 'success'))
+    .then(() => { toast('Player ready', 'success'); initScrubbing(); })
     .catch(err => { console.warn('SDK:', err); toast('Playback unavailable (Premium required).', 'error'); });
-
-  // ── Event listeners ───────────────────────────────────────────────────────
 
   // Search
   $('search-input').addEventListener('input', e => {
@@ -520,14 +659,19 @@ async function launchApp() {
       $('search-results').classList.add('hidden');
   });
 
-  // Sidebar + editor
+  // Sidebar
   $('new-playlist-btn').addEventListener('click', createPlaylist);
+  $('import-btn').addEventListener('click', openImportModal);
+
+  // Import modal
+  $('close-import').addEventListener('click', closeImportModal);
+  $('import-modal').querySelector('.modal-bg').addEventListener('click', closeImportModal);
+
+  // Editor
   $('playlist-name').addEventListener('input', e => {
     if (currentPlaylist()) { currentPlaylist().name = e.target.value; renderSidebar(); }
   });
-  $('play-all-btn').addEventListener('click', () => {
-    if (currentPlaylist()?.tracks.length) playAt(0);
-  });
+  $('play-all-btn').addEventListener('click', () => { if (currentPlaylist()?.tracks.length) playAt(0); });
   $('save-btn').addEventListener('click', savePlaylist);
   $('delete-btn').addEventListener('click', deletePlaylist);
 
@@ -544,7 +688,7 @@ async function launchApp() {
     if (pl && S.nowIdx < pl.tracks.length - 1) playAt(S.nowIdx + 1);
   });
 
-  // Mobile player controls
+  // Mobile player
   $('mp-pp').addEventListener('click', togglePlayback);
   $('mp-prev').addEventListener('click', () => { if (S.nowIdx > 0) playAt(S.nowIdx - 1); });
   $('mp-next').addEventListener('click', () => {
@@ -558,14 +702,13 @@ async function launchApp() {
   );
 
   // GitHub token (in-app)
-  const ghIn  = $('gh-token-input');
-  const ghBtn = $('gh-token-save-btn');
+  const ghIn = $('gh-token-input'), ghBtn = $('gh-token-save-btn');
   if (ghIn && ghBtn) {
     ghBtn.addEventListener('click', () => applyGhToken(ghIn.value.trim()));
-    ghIn.addEventListener('keydown',  e => { if (e.key === 'Enter') applyGhToken(ghIn.value.trim()); });
+    ghIn.addEventListener('keydown', e => { if (e.key === 'Enter') applyGhToken(ghIn.value.trim()); });
   }
 
-  // PWA install button
+  // PWA install
   $('install-btn')?.addEventListener('click', async () => {
     if (!S.installEvt) return;
     S.installEvt.prompt();
@@ -574,52 +717,35 @@ async function launchApp() {
   });
 }
 
-// ── Bootstrap ────────────────────────────────────────────────────────────────
-// Capture PWA install prompt
+// ── Bootstrap ──────────────────────────────────────────────────────────────
 window.addEventListener('beforeinstallprompt', e => {
-  e.preventDefault();
-  S.installEvt = e;
+  e.preventDefault(); S.installEvt = e;
   $('install-btn')?.classList.remove('hidden');
 });
 
 (async () => {
-  // Config check
   const clientId = window.APP_CONFIG?.spotify_client_id || '';
-  if (!clientId || clientId === 'YOUR_SPOTIFY_CLIENT_ID_HERE') {
+  if (!clientId || clientId === 'YOUR_SPOTIFY_CLIENT_ID_HERE')
     $('config-warning').classList.remove('hidden');
-  }
 
-  // Handle Spotify OAuth callback
   const params = new URLSearchParams(window.location.search);
   const code   = params.get('code');
   if (code) {
     history.replaceState({}, '', window.location.pathname);
-    try {
-      await SpotifyAuth.handleCallback(code);
-      await launchApp();
-    } catch (e) {
-      toast('Login failed: ' + e.message, 'error');
-      console.error(e);
-    }
+    try { await SpotifyAuth.handleCallback(code); await launchApp(); }
+    catch (e) { toast('Login failed: ' + e.message, 'error'); console.error(e); }
     return;
   }
 
-  if (SpotifyAuth.isLoggedIn()) {
-    await launchApp();
-    return;
-  }
+  if (SpotifyAuth.isLoggedIn()) { await launchApp(); return; }
 
-  // Show auth overlay
   $('spotify-login-btn').addEventListener('click', () => SpotifyAuth.login());
-
-  const ghSave = $('gh-token-save-btn');
-  const ghIn   = $('gh-token-input');
+  const ghSave = $('gh-token-save-btn'), ghIn = $('gh-token-input');
   if (ghSave) {
     ghSave.addEventListener('click', () => applyGhToken(ghIn.value.trim()));
-    ghIn.addEventListener('keydown',  e => { if (e.key === 'Enter') applyGhToken(ghIn.value.trim()); });
+    ghIn.addEventListener('keydown', e => { if (e.key === 'Enter') applyGhToken(ghIn.value.trim()); });
     if (GitHub.getToken()) ghIn.value = GitHub.getToken();
   }
-
   $('install-btn')?.addEventListener('click', async () => {
     if (!S.installEvt) return;
     S.installEvt.prompt();

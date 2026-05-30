@@ -2,11 +2,11 @@
 
 const SpotifyAuth = (() => {
   const KEYS = {
-    token:     'sp_access_token',
-    refresh:   'sp_refresh_token',
-    expires:   'sp_expires_at',
-    verifier:  'sp_code_verifier',
-    user:      'sp_user',
+    token:    'sp_access_token',
+    refresh:  'sp_refresh_token',
+    expires:  'sp_expires_at',
+    verifier: 'sp_code_verifier',
+    user:     'sp_user',
   };
 
   const SCOPES = [
@@ -15,14 +15,13 @@ const SpotifyAuth = (() => {
     'user-read-private',
     'user-read-playback-state',
     'user-modify-playback-state',
+    'playlist-read-private',
+    'playlist-read-collaborative',
   ].join(' ');
 
-  function clientId() {
-    return window.APP_CONFIG?.spotify_client_id || '';
-  }
+  function clientId() { return window.APP_CONFIG?.spotify_client_id || ''; }
 
   function redirectUri() {
-    // Works both locally and on GitHub Pages.
     const { origin, pathname } = window.location;
     const base = pathname.replace(/\/index\.html$/, '').replace(/\/$/, '');
     return origin + base;
@@ -45,17 +44,13 @@ const SpotifyAuth = (() => {
   }
 
   async function login() {
-    const verifier = rand(64);
+    const verifier  = rand(64);
     const challenge = b64url(await sha256(verifier));
     sessionStorage.setItem(KEYS.verifier, verifier);
-
     const p = new URLSearchParams({
-      client_id:             clientId(),
-      response_type:         'code',
-      redirect_uri:          redirectUri(),
-      scope:                 SCOPES,
-      code_challenge_method: 'S256',
-      code_challenge:        challenge,
+      client_id: clientId(), response_type: 'code',
+      redirect_uri: redirectUri(), scope: SCOPES,
+      code_challenge_method: 'S256', code_challenge: challenge,
     });
     window.location.href = 'https://accounts.spotify.com/authorize?' + p;
   }
@@ -63,24 +58,19 @@ const SpotifyAuth = (() => {
   async function handleCallback(code) {
     const verifier = sessionStorage.getItem(KEYS.verifier);
     if (!verifier) throw new Error('No PKCE verifier — try logging in again.');
-
     const res = await fetch('https://accounts.spotify.com/api/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
-        client_id:     clientId(),
-        grant_type:    'authorization_code',
-        code,
-        redirect_uri:  redirectUri(),
-        code_verifier: verifier,
+        client_id: clientId(), grant_type: 'authorization_code',
+        code, redirect_uri: redirectUri(), code_verifier: verifier,
       }),
     });
     if (!res.ok) {
       const e = await res.json().catch(() => ({}));
       throw new Error(e.error_description || 'Token exchange failed');
     }
-    const data = await res.json();
-    _storeTokens(data);
+    _storeTokens(await res.json());
     sessionStorage.removeItem(KEYS.verifier);
   }
 
@@ -90,11 +80,7 @@ const SpotifyAuth = (() => {
     const res = await fetch('https://accounts.spotify.com/api/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id:     clientId(),
-        grant_type:    'refresh_token',
-        refresh_token: rt,
-      }),
+      body: new URLSearchParams({ client_id: clientId(), grant_type: 'refresh_token', refresh_token: rt }),
     });
     if (!res.ok) throw new Error('Token refresh failed — please log in again.');
     const data = await res.json();
@@ -114,9 +100,7 @@ const SpotifyAuth = (() => {
     return localStorage.getItem(KEYS.token);
   }
 
-  function isLoggedIn() {
-    return !!localStorage.getItem(KEYS.token);
-  }
+  function isLoggedIn() { return !!localStorage.getItem(KEYS.token); }
 
   function logout() {
     Object.values(KEYS).forEach(k => { localStorage.removeItem(k); sessionStorage.removeItem(k); });
@@ -134,11 +118,7 @@ const SpotifyAuth = (() => {
     const token = await getToken();
     const res = await fetch('https://api.spotify.com/v1' + path, {
       ...opts,
-      headers: {
-        Authorization: 'Bearer ' + token,
-        'Content-Type': 'application/json',
-        ...(opts.headers || {}),
-      },
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json', ...(opts.headers || {}) },
     });
     if (res.status === 204) return null;
     if (!res.ok) {
@@ -155,19 +135,32 @@ const SpotifyAuth = (() => {
 
   async function startPlayback(deviceId, trackId, positionMs) {
     const token = await getToken();
-    const res = await fetch(
-      'https://api.spotify.com/v1/me/player/play?device_id=' + deviceId,
-      {
-        method: 'PUT',
-        headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ uris: ['spotify:track:' + trackId], position_ms: positionMs }),
-      }
-    );
+    const res = await fetch('https://api.spotify.com/v1/me/player/play?device_id=' + deviceId, {
+      method: 'PUT',
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uris: ['spotify:track:' + trackId], position_ms: positionMs }),
+    });
     if (!res.ok && res.status !== 204) {
       const e = await res.json().catch(() => ({}));
       throw new Error(e.error?.message || 'Playback failed (' + res.status + ')');
     }
   }
 
-  return { login, handleCallback, getToken, isLoggedIn, logout, getUser, search, startPlayback, apiCall };
+  // Returns up to 50 of the user's playlists
+  async function getUserPlaylists() {
+    const data = await apiCall('/me/playlists?limit=50');
+    return data.items || [];
+  }
+
+  // Returns track objects for a playlist (up to 100 tracks, filters out local files)
+  async function getPlaylistTracks(playlistId) {
+    const data = await apiCall(
+      `/playlists/${playlistId}/tracks?limit=100` +
+      `&fields=items(track(id,name,artists,album(name,images),duration_ms))`
+    );
+    return (data.items || []).map(i => i.track).filter(t => t?.id);
+  }
+
+  return { login, handleCallback, getToken, isLoggedIn, logout, getUser,
+           search, startPlayback, getUserPlaylists, getPlaylistTracks, apiCall };
 })();
