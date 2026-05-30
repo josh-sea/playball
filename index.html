@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Timed Playlist Editor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+
+<!-- ── Setup / Auth overlay ─────────────────────────────────────────── -->
+<div id="auth-overlay">
+  <div class="auth-card">
+    <div class="auth-logo">🎵</div>
+    <h1>Timed Playlist</h1>
+    <p class="auth-subtitle">Search Spotify, set start &amp; stop times, save to this repo.</p>
+
+    <div id="config-warning" class="config-warning hidden">
+      ⚠️ <strong>config.js</strong> still has the placeholder Client ID.<br />
+      Edit <code>config.js</code> with your Spotify app's Client ID before using.
+    </div>
+
+    <button id="spotify-login-btn" class="btn btn-spotify">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+      </svg>
+      Connect Spotify
+    </button>
+
+    <div class="auth-divider">optional</div>
+
+    <div class="github-setup">
+      <p class="setup-label">GitHub token to save playlists to this repo (stored only in your browser):</p>
+      <div class="token-row">
+        <input type="password" id="gh-token-input" placeholder="ghp_..." autocomplete="off" />
+        <button id="gh-token-save-btn" class="btn btn-secondary">Save</button>
+      </div>
+      <p class="token-hint">
+        <a href="https://github.com/settings/tokens/new?scopes=repo&description=Timed+Playlist+Editor" target="_blank" rel="noopener">Generate a token ↗</a>
+        &nbsp;·&nbsp; needs <code>repo</code> scope
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- ── Main app ────────────────────────────────────────────────────────── -->
+<div id="app" class="hidden">
+
+  <header>
+    <div class="header-brand">🎵 Timed Playlist</div>
+    <div class="header-search">
+      <div class="search-wrap">
+        <svg class="search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input id="search-input" type="text" placeholder="Search songs…" autocomplete="off" />
+      </div>
+    </div>
+    <div class="header-right">
+      <span id="user-display"></span>
+      <button id="logout-btn" class="btn btn-ghost btn-sm">Logout</button>
+    </div>
+  </header>
+
+  <div id="search-results" class="search-results hidden"></div>
+
+  <div class="workspace">
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-top">
+        <span class="sidebar-title">Playlists</span>
+        <button id="new-playlist-btn" class="btn btn-icon" title="New playlist">+</button>
+      </div>
+      <div id="playlist-list" class="playlist-list">
+        <p class="hint">Click + to create a playlist.</p>
+      </div>
+      <div id="gh-status" class="gh-status"></div>
+    </aside>
+
+    <!-- Editor -->
+    <section class="editor">
+      <div id="editor-empty" class="editor-empty">
+        Select or create a playlist to get started.
+      </div>
+
+      <div id="editor-content" class="hidden editor-inner">
+        <div class="editor-header">
+          <input id="playlist-name" type="text" class="playlist-name-input" placeholder="Playlist name…" />
+          <div class="editor-btns">
+            <button id="play-all-btn" class="btn btn-primary btn-sm">▶ Play All</button>
+            <button id="save-btn" class="btn btn-spotify btn-sm">Save to Repo</button>
+            <button id="delete-btn" class="btn btn-danger btn-sm">Delete</button>
+          </div>
+        </div>
+        <div id="track-list" class="track-list">
+          <p class="hint">Search for songs above, then click Add.</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Player bar -->
+  <div id="player-bar" class="player-bar hidden">
+    <div class="pb-info">
+      <img id="pb-art" src="" alt="" />
+      <div>
+        <div id="pb-name" class="pb-name"></div>
+        <div id="pb-artist" class="pb-artist"></div>
+      </div>
+    </div>
+    <div class="pb-controls">
+      <button id="prev-btn" class="pbtn">⏮</button>
+      <button id="pp-btn" class="pbtn pbtn-main">▶</button>
+      <button id="next-btn" class="pbtn">⏭</button>
+    </div>
+    <div class="pb-progress">
+      <span id="pb-cur" class="pb-time">0:00</span>
+      <div class="pb-bar-wrap">
+        <div class="pb-bar"><div id="pb-fill" class="pb-fill"></div></div>
+      </div>
+      <span id="pb-end" class="pb-time">0:00</span>
+    </div>
+    <div id="pb-segment" class="pb-segment"></div>
+  </div>
+
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script src="config.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/github.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
