@@ -2,15 +2,24 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Timed Playlist Editor</title>
+
+  <!-- PWA -->
+  <meta name="theme-color" content="#1db954" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+  <meta name="apple-mobile-web-app-title" content="Timed Playlist" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icon.svg" />
+
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
 
-<!-- ── Setup / Auth overlay ─────────────────────────────────────────── -->
+<!-- ── Auth / Setup overlay ──────────────────────────────────────────── -->
 <div id="auth-overlay">
   <div class="auth-card">
     <div class="auth-logo">🎵</div>
@@ -19,7 +28,7 @@
 
     <div id="config-warning" class="config-warning hidden">
       ⚠️ <strong>config.js</strong> still has the placeholder Client ID.<br />
-      Edit <code>config.js</code> with your Spotify app's Client ID before using.
+      Edit <code>config.js</code> with your Spotify app’s Client ID.
     </div>
 
     <button id="spotify-login-btn" class="btn btn-spotify">
@@ -34,7 +43,7 @@
     <div class="github-setup">
       <p class="setup-label">GitHub token to save playlists to this repo (stored only in your browser):</p>
       <div class="token-row">
-        <input type="password" id="gh-token-input" placeholder="ghp_..." autocomplete="off" />
+        <input type="password" id="gh-token-input" placeholder="ghp_…" autocomplete="off" />
         <button id="gh-token-save-btn" class="btn btn-secondary">Save</button>
       </div>
       <p class="token-hint">
@@ -42,6 +51,10 @@
         &nbsp;·&nbsp; needs <code>repo</code> scope
       </p>
     </div>
+
+    <button id="install-btn" class="btn btn-secondary install-btn hidden">
+      📲 Add to Home Screen
+    </button>
   </div>
 </div>
 
@@ -66,7 +79,7 @@
 
   <div class="workspace">
 
-    <!-- Sidebar -->
+    <!-- Sidebar (Library tab on mobile) -->
     <aside class="sidebar">
       <div class="sidebar-top">
         <span class="sidebar-title">Playlists</span>
@@ -78,12 +91,11 @@
       <div id="gh-status" class="gh-status"></div>
     </aside>
 
-    <!-- Editor -->
+    <!-- Editor (Browse tab on mobile) -->
     <section class="editor">
       <div id="editor-empty" class="editor-empty">
         Select or create a playlist to get started.
       </div>
-
       <div id="editor-content" class="hidden editor-inner">
         <div class="editor-header">
           <input id="playlist-name" type="text" class="playlist-name-input" placeholder="Playlist name…" />
@@ -98,9 +110,42 @@
         </div>
       </div>
     </section>
-  </div>
 
-  <!-- Player bar -->
+    <!-- Now Playing panel (mobile only, shown in Playing tab) -->
+    <div class="mobile-playing">
+      <div id="mp-idle" class="mp-idle">
+        <div class="mp-idle-icon">🎵</div>
+        <p>Nothing playing yet</p>
+        <p class="mp-idle-hint">Search for a song and hit Play.</p>
+      </div>
+      <div id="mp-track" class="mp-track hidden">
+        <div class="mp-art-wrap">
+          <img id="mp-art" src="" alt="" />
+        </div>
+        <div class="mp-meta">
+          <div id="mp-name" class="mp-name"></div>
+          <div id="mp-artist" class="mp-artist"></div>
+          <div id="mp-pl" class="mp-pl"></div>
+        </div>
+        <div id="mp-seg" class="mp-seg"></div>
+        <div class="mp-prog">
+          <div class="pb-bar"><div id="mp-fill" class="pb-fill"></div></div>
+          <div class="mp-times">
+            <span id="mp-cur">0:00</span>
+            <span id="mp-end">0:00</span>
+          </div>
+        </div>
+        <div class="mp-ctrl">
+          <button id="mp-prev" class="mpbtn">⏮</button>
+          <button id="mp-pp"   class="mpbtn mpbtn-main">▶</button>
+          <button id="mp-next" class="mpbtn">⏭</button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /.workspace -->
+
+  <!-- Desktop player bar -->
   <div id="player-bar" class="player-bar hidden">
     <div class="pb-info">
       <img id="pb-art" src="" alt="" />
@@ -111,7 +156,7 @@
     </div>
     <div class="pb-controls">
       <button id="prev-btn" class="pbtn">⏮</button>
-      <button id="pp-btn" class="pbtn pbtn-main">▶</button>
+      <button id="pp-btn"   class="pbtn pbtn-main">▶</button>
       <button id="next-btn" class="pbtn">⏭</button>
     </div>
     <div class="pb-progress">
@@ -124,7 +169,29 @@
     <div id="pb-segment" class="pb-segment"></div>
   </div>
 
-</div>
+  <!-- Mobile bottom nav -->
+  <nav class="mobile-nav" role="tablist">
+    <button class="mnav-btn" data-tab="library" role="tab" aria-label="Library">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/>
+      </svg>
+      <span>Library</span>
+    </button>
+    <button class="mnav-btn active" data-tab="editor" role="tab" aria-label="Browse">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+      </svg>
+      <span>Browse</span>
+    </button>
+    <button class="mnav-btn" data-tab="playing" role="tab" aria-label="Now Playing">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+      </svg>
+      <span>Playing</span>
+    </button>
+  </nav>
+
+</div><!-- /#app -->
 
 <div id="toast" class="toast hidden"></div>
 
@@ -132,5 +199,13 @@
 <script src="js/auth.js"></script>
 <script src="js/github.js"></script>
 <script src="js/app.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () =>
+      navigator.serviceWorker.register('/playball/sw.js')
+        .catch(e => console.warn('SW:', e))
+    );
+  }
+</script>
 </body>
 </html>
