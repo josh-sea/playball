@@ -2,20 +2,24 @@
 
 // ── State ────────────────────────────────────────────────────────────────────
 const S = {
-  user:          null,   // Spotify user object
-  playlists:     [],     // [{ name, tracks[], path?, sha?, created }]
-  activeIdx:     -1,
-  searchTimer:   null,
+  user:        null,
+  playlists:   [],
+  activeIdx:   -1,
+  searchTimer: null,
+  mobileTab:   'editor',
+  installEvt:  null,
   // Player
-  sdkPlayer:     null,
-  deviceId:      null,
-  nowIdx:        -1,     // which track index is playing/cued
-  playing:       false,
-  stopTimer:     null,
-  progTimer:     null,
-  segStart:      0,
-  segEnd:        0,
+  sdkPlayer:   null,
+  deviceId:    null,
+  nowIdx:      -1,
+  playing:     false,
+  stopTimer:   null,
+  progTimer:   null,
+  segStart:    0,
+  segEnd:      0,
 };
+
+const isMobile = () => window.innerWidth <= 640;
 
 // ── DOM helpers ───────────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
@@ -27,9 +31,7 @@ function msToTime(ms) {
 
 function timeToMs(str) {
   const parts = (str || '0:00').split(':');
-  const m = parseInt(parts[0]) || 0;
-  const s = parseInt(parts[1]) || 0;
-  return (m * 60 + s) * 1000;
+  return ((parseInt(parts[0]) || 0) * 60 + (parseInt(parts[1]) || 0)) * 1000;
 }
 
 let _toastTimer;
@@ -40,6 +42,22 @@ function toast(msg, type = '') {
   el.classList.remove('hidden');
   clearTimeout(_toastTimer);
   _toastTimer = setTimeout(() => el.classList.add('hidden'), 3200);
+}
+
+function esc(str) {
+  return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Mobile tab switching ───────────────────────────────────────────────────────
+function switchTab(tab) {
+  S.mobileTab = tab;
+  const map = { library: '.sidebar', editor: '.editor', playing: '.mobile-playing' };
+  Object.entries(map).forEach(([t, sel]) => {
+    document.querySelector(sel)?.classList.toggle('mob-active', t === tab);
+  });
+  document.querySelectorAll('.mnav-btn').forEach(btn =>
+    btn.classList.toggle('active', btn.dataset.tab === tab)
+  );
 }
 
 // ── Playlist helpers ──────────────────────────────────────────────────────────
@@ -146,12 +164,12 @@ function onTimeChange(e) {
   const field = inp.dataset.f;
   const pl   = currentPlaylist();
   if (!pl) return;
-  const t    = pl.tracks[i];
+  const t = pl.tracks[i];
   let ms = timeToMs(inp.value);
   if (field === 'start_ms') ms = Math.max(0, Math.min(ms, t.end_ms - 1000));
   else                      ms = Math.max(t.start_ms + 1000, Math.min(ms, t.duration_ms));
-  t[field]   = ms;
-  inp.value  = msToTime(ms);
+  t[field]  = ms;
+  inp.value = msToTime(ms);
 }
 
 function moveTrack(i, dir) {
@@ -183,14 +201,10 @@ async function initSDK() {
         getOAuthToken: async cb => cb(await SpotifyAuth.getToken()),
         volume: 0.8,
       });
-
-      S.sdkPlayer.addListener('ready', ({ device_id }) => {
-        S.deviceId = device_id;
-        resolve();
-      });
-      S.sdkPlayer.addListener('not_ready', () => { S.deviceId = null; });
-      S.sdkPlayer.addListener('account_error', ({ message }) => {
-        toast('Spotify Premium is required for playback.', 'error');
+      S.sdkPlayer.addListener('ready',         ({ device_id }) => { S.deviceId = device_id; resolve(); });
+      S.sdkPlayer.addListener('not_ready',      ()             => { S.deviceId = null; });
+      S.sdkPlayer.addListener('account_error',  ({ message })  => {
+        toast('Spotify Premium required for playback.', 'error');
         console.warn('account_error:', message);
       });
       S.sdkPlayer.addListener('initialization_error', ({ message }) => reject(new Error(message)));
@@ -198,13 +212,11 @@ async function initSDK() {
       S.sdkPlayer.addListener('player_state_changed', st => {
         if (!st) return;
         S.playing = !st.paused;
-        updatePPBtn();
+        syncPPBtns();
       });
-
       const ok = await S.sdkPlayer.connect();
       if (!ok) reject(new Error('SDK connect failed'));
     };
-
     const sc = document.createElement('script');
     sc.src = 'https://sdk.scdn.co/spotify-player.js';
     sc.onerror = () => reject(new Error('Failed to load Spotify SDK'));
@@ -221,7 +233,7 @@ async function playAt(i) {
   clearInterval(S.progTimer);
 
   const track = pl.tracks[i];
-  S.nowIdx  = i;
+  S.nowIdx   = i;
   S.segStart = track.start_ms;
   S.segEnd   = track.end_ms;
   const segDur = S.segEnd - S.segStart;
@@ -234,20 +246,25 @@ async function playAt(i) {
   }
 
   S.playing = true;
-  updatePPBtn();
-  updatePlayerBar(track);
-  renderEditor(); // highlight playing row
+  syncPPBtns();
+  syncPlayerUI(track);
+  renderEditor();
 
-  // Progress ticker
+  if (isMobile()) switchTab('playing');
+
   const wallStart = Date.now();
   S.progTimer = setInterval(() => {
     const elapsed = Date.now() - wallStart;
     const pct = Math.min(100, (elapsed / segDur) * 100);
+    const cur  = msToTime(S.segStart + elapsed);
+    // Desktop
     $('pb-fill').style.width = pct + '%';
-    $('pb-cur').textContent  = msToTime(S.segStart + elapsed);
+    $('pb-cur').textContent  = cur;
+    // Mobile
+    $('mp-fill').style.width = pct + '%';
+    $('mp-cur').textContent  = cur;
   }, 200);
 
-  // Auto-advance
   S.stopTimer = setTimeout(async () => {
     clearInterval(S.progTimer);
     if (S.nowIdx < pl.tracks.length - 1) {
@@ -264,22 +281,57 @@ async function stopPlayback() {
   if (S.sdkPlayer) await S.sdkPlayer.pause();
   S.playing = false;
   S.nowIdx  = -1;
-  updatePPBtn();
+  syncPPBtns();
   $('pb-fill').style.width = '0%';
+  $('mp-fill').style.width = '0%';
   renderEditor();
 }
 
-function updatePPBtn() {
-  $('pp-btn').textContent = S.playing ? '⏸' : '▶';
+async function togglePlayback() {
+  if (S.playing) {
+    clearTimeout(S.stopTimer);
+    clearInterval(S.progTimer);
+    if (S.sdkPlayer) await S.sdkPlayer.pause();
+    S.playing = false; syncPPBtns();
+  } else if (S.nowIdx >= 0) {
+    if (S.sdkPlayer) await S.sdkPlayer.resume();
+    S.playing = true; syncPPBtns();
+  } else if (currentPlaylist()?.tracks.length) {
+    playAt(0);
+  }
 }
 
-function updatePlayerBar(track) {
-  $('pb-art').src         = track.image;
+function syncPPBtns() {
+  const icon = S.playing ? '⏸' : '▶';
+  $('pp-btn').textContent = icon;
+  $('mp-pp').textContent  = icon;
+}
+
+function syncPlayerUI(track) {
+  // Desktop bar
+  $('pb-art').src            = track.image;
   $('pb-name').textContent   = track.name;
   $('pb-artist').textContent = track.artist;
   $('pb-end').textContent    = msToTime(track.end_ms);
   $('pb-segment').textContent = msToTime(track.start_ms) + ' → ' + msToTime(track.end_ms);
   $('player-bar').classList.remove('hidden');
+
+  // Mobile now-playing panel
+  const art = $('mp-art');
+  art.src = track.image;
+  art.classList.remove('pulse');
+  void art.offsetWidth; // reflow to restart animation
+  art.classList.add('pulse');
+
+  $('mp-name').textContent   = track.name;
+  $('mp-artist').textContent = track.artist;
+  $('mp-pl').textContent     = currentPlaylist()?.name || '';
+  $('mp-seg').textContent    = msToTime(track.start_ms) + ' → ' + msToTime(track.end_ms);
+  $('mp-end').textContent    = msToTime(track.end_ms);
+
+  // Show track content, hide idle
+  $('mp-idle').classList.add('hidden');
+  $('mp-track').classList.remove('hidden');
 }
 
 // ── Search ────────────────────────────────────────────────────────────────────
@@ -333,6 +385,7 @@ function addTrack(track) {
   currentPlaylist().tracks.push(track);
   renderEditor();
   renderSidebar();
+  if (isMobile()) switchTab('editor');
 }
 
 // ── Playlist CRUD ─────────────────────────────────────────────────────────────
@@ -341,14 +394,19 @@ function createPlaylist() {
   S.activeIdx = S.playlists.length - 1;
   renderSidebar();
   renderEditor();
-  $('playlist-name').focus();
-  $('playlist-name').select();
+  if (isMobile()) {
+    switchTab('editor');
+  } else {
+    $('playlist-name').focus();
+    $('playlist-name').select();
+  }
 }
 
 function openPlaylist(i) {
   S.activeIdx = i;
   renderSidebar();
   renderEditor();
+  if (isMobile()) switchTab('editor');
 }
 
 async function savePlaylist() {
@@ -390,7 +448,7 @@ async function deletePlaylist() {
 async function loadSavedPlaylists() {
   if (!GitHub.hasToken() || !S.user) return;
   try {
-    const files = await GitHub.listPlaylists(S.user.id);
+    const files  = await GitHub.listPlaylists(S.user.id);
     const loaded = (await Promise.all(files.map(f => GitHub.loadPlaylist(f.path)))).filter(Boolean);
     const remote = loaded.map(({ playlist, sha }, idx) => ({ ...playlist, path: files[idx].path, sha }));
     const local  = S.playlists.filter(p => !p.path);
@@ -398,15 +456,14 @@ async function loadSavedPlaylists() {
     renderSidebar();
     const gs = $('gh-status');
     gs.textContent = `✓ GitHub connected · ${remote.length} playlist${remote.length !== 1 ? 's' : ''} saved`;
-    gs.className = 'gh-status ok';
+    gs.className   = 'gh-status ok';
   } catch (e) {
     const gs = $('gh-status');
     gs.textContent = 'GitHub error: ' + e.message;
-    gs.className = 'gh-status err';
+    gs.className   = 'gh-status err';
   }
 }
 
-// ── GitHub token (works from both overlay and app) ────────────────────────────
 async function applyGhToken(token) {
   if (!token) return;
   GitHub.saveToken(token);
@@ -425,7 +482,7 @@ async function applyGhToken(token) {
   }
 }
 
-// ── Init ──────────────────────────────────────────────────────────────────────
+// ── App init ───────────────────────────────────────────────────────────────────
 async function launchApp() {
   $('auth-overlay').classList.add('hidden');
   $('app').classList.remove('hidden');
@@ -433,23 +490,27 @@ async function launchApp() {
   S.user = await SpotifyAuth.getUser();
   $('user-display').textContent = S.user.display_name || S.user.id;
 
-  // Restore saved GitHub token
+  // Default mobile tab
+  if (isMobile()) switchTab('editor');
+
+  // GitHub token
   const savedTok = GitHub.getToken();
   if (savedTok) {
     $('gh-token-input').value = savedTok;
-    const gs = $('gh-status');
-    gs.textContent = 'Connecting to GitHub…';
+    $('gh-status').textContent = 'Connecting to GitHub…';
     loadSavedPlaylists();
   } else {
     $('gh-status').textContent = 'No GitHub token — playlists won\'t be saved.';
   }
 
-  // Init Spotify SDK
+  // Spotify SDK
   initSDK()
     .then(() => toast('Player ready', 'success'))
-    .catch(err => { console.warn('SDK:', err); toast('Playback unavailable (Spotify Premium required).', 'error'); });
+    .catch(err => { console.warn('SDK:', err); toast('Playback unavailable (Premium required).', 'error'); });
 
-  // Wire up controls
+  // ── Event listeners ───────────────────────────────────────────────────────
+
+  // Search
   $('search-input').addEventListener('input', e => {
     clearTimeout(S.searchTimer);
     S.searchTimer = setTimeout(() => doSearch(e.target.value), 380);
@@ -459,58 +520,70 @@ async function launchApp() {
       $('search-results').classList.add('hidden');
   });
 
+  // Sidebar + editor
   $('new-playlist-btn').addEventListener('click', createPlaylist);
-
   $('playlist-name').addEventListener('input', e => {
     if (currentPlaylist()) { currentPlaylist().name = e.target.value; renderSidebar(); }
   });
-
   $('play-all-btn').addEventListener('click', () => {
     if (currentPlaylist()?.tracks.length) playAt(0);
   });
   $('save-btn').addEventListener('click', savePlaylist);
   $('delete-btn').addEventListener('click', deletePlaylist);
 
+  // Logout
   $('logout-btn').addEventListener('click', () => {
     if (confirm('Log out of Spotify?')) { SpotifyAuth.logout(); location.reload(); }
   });
 
-  // Player bar controls
-  $('pp-btn').addEventListener('click', async () => {
-    if (S.playing) {
-      clearTimeout(S.stopTimer); clearInterval(S.progTimer);
-      if (S.sdkPlayer) await S.sdkPlayer.pause();
-      S.playing = false; updatePPBtn();
-    } else if (S.nowIdx >= 0) {
-      if (S.sdkPlayer) await S.sdkPlayer.resume();
-      S.playing = true; updatePPBtn();
-    } else if (currentPlaylist()?.tracks.length) {
-      playAt(0);
-    }
-  });
+  // Desktop player bar
+  $('pp-btn').addEventListener('click', togglePlayback);
   $('prev-btn').addEventListener('click', () => { if (S.nowIdx > 0) playAt(S.nowIdx - 1); });
   $('next-btn').addEventListener('click', () => {
     const pl = currentPlaylist();
     if (pl && S.nowIdx < pl.tracks.length - 1) playAt(S.nowIdx + 1);
   });
 
-  // GitHub token from inside the app (sidebar)
+  // Mobile player controls
+  $('mp-pp').addEventListener('click', togglePlayback);
+  $('mp-prev').addEventListener('click', () => { if (S.nowIdx > 0) playAt(S.nowIdx - 1); });
+  $('mp-next').addEventListener('click', () => {
+    const pl = currentPlaylist();
+    if (pl && S.nowIdx < pl.tracks.length - 1) playAt(S.nowIdx + 1);
+  });
+
+  // Mobile nav
+  document.querySelectorAll('.mnav-btn').forEach(btn =>
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab))
+  );
+
+  // GitHub token (in-app)
   const ghIn  = $('gh-token-input');
   const ghBtn = $('gh-token-save-btn');
   if (ghIn && ghBtn) {
     ghBtn.addEventListener('click', () => applyGhToken(ghIn.value.trim()));
-    ghIn.addEventListener('keydown', e => { if (e.key === 'Enter') applyGhToken(ghIn.value.trim()); });
+    ghIn.addEventListener('keydown',  e => { if (e.key === 'Enter') applyGhToken(ghIn.value.trim()); });
   }
-}
 
-// ── Escape helper ─────────────────────────────────────────────────────────────
-function esc(str) {
-  return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  // PWA install button
+  $('install-btn')?.addEventListener('click', async () => {
+    if (!S.installEvt) return;
+    S.installEvt.prompt();
+    const { outcome } = await S.installEvt.userChoice;
+    if (outcome === 'accepted') $('install-btn').classList.add('hidden');
+  });
 }
 
 // ── Bootstrap ────────────────────────────────────────────────────────────────
+// Capture PWA install prompt
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  S.installEvt = e;
+  $('install-btn')?.classList.remove('hidden');
+});
+
 (async () => {
-  // Warn if config is unconfigured
+  // Config check
   const clientId = window.APP_CONFIG?.spotify_client_id || '';
   if (!clientId || clientId === 'YOUR_SPOTIFY_CLIENT_ID_HERE') {
     $('config-warning').classList.remove('hidden');
@@ -536,15 +609,21 @@ function esc(str) {
     return;
   }
 
-  // Show auth overlay and wire buttons
+  // Show auth overlay
   $('spotify-login-btn').addEventListener('click', () => SpotifyAuth.login());
 
   const ghSave = $('gh-token-save-btn');
   const ghIn   = $('gh-token-input');
   if (ghSave) {
     ghSave.addEventListener('click', () => applyGhToken(ghIn.value.trim()));
-    ghIn.addEventListener('keydown', e => { if (e.key === 'Enter') applyGhToken(ghIn.value.trim()); });
-    // Pre-fill if already stored
+    ghIn.addEventListener('keydown',  e => { if (e.key === 'Enter') applyGhToken(ghIn.value.trim()); });
     if (GitHub.getToken()) ghIn.value = GitHub.getToken();
   }
+
+  $('install-btn')?.addEventListener('click', async () => {
+    if (!S.installEvt) return;
+    S.installEvt.prompt();
+    const { outcome } = await S.installEvt.userChoice;
+    if (outcome === 'accepted') $('install-btn').classList.add('hidden');
+  });
 })();
