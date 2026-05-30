@@ -44,16 +44,17 @@ const SpotifyAuth = (() => {
       .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
   }
 
-  async function login() {
+  async function login(forceDialog = false) {
     const verifier  = rand(64);
     const challenge = b64url(await sha256(verifier));
     sessionStorage.setItem(KEYS.verifier, verifier);
-    const p = new URLSearchParams({
+    const params = {
       client_id: clientId(), response_type: 'code',
       redirect_uri: redirectUri(), scope: SCOPES,
       code_challenge_method: 'S256', code_challenge: challenge,
-    });
-    window.location.href = 'https://accounts.spotify.com/authorize?' + p;
+    };
+    if (forceDialog) params.show_dialog = 'true';
+    window.location.href = 'https://accounts.spotify.com/authorize?' + new URLSearchParams(params);
   }
 
   async function handleCallback(code) {

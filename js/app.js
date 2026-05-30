@@ -499,13 +499,13 @@ async function openImportModal() {
     $('import-list').innerHTML = `
       <div style="padding:24px;text-align:center">
         <p style="margin-bottom:16px;color:var(--text-muted);line-height:1.5">
-          Playlist access requires updated permissions.<br>Log out and log back in to grant them.
+          Spotify needs to approve playlist access.<br>Click below — Spotify will show an approval screen.
         </p>
-        <button id="reauth-btn" class="btn btn-primary">Log out &amp; re-authorize</button>
+        <button id="reauth-btn" class="btn btn-primary">Grant playlist access</button>
       </div>`;
     $('reauth-btn').addEventListener('click', () => {
       SpotifyAuth.logout();
-      location.reload();
+      SpotifyAuth.login(true);
     });
     return;
   }
