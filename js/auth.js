@@ -155,8 +155,7 @@ const SpotifyAuth = (() => {
   // Returns track objects for a playlist (up to 100 tracks, filters out local files)
   async function getPlaylistTracks(playlistId) {
     const data = await apiCall(
-      `/playlists/${playlistId}/tracks?limit=100` +
-      `&fields=items(track(id,name,artists,album(name,images),duration_ms))`
+      `/playlists/${encodeURIComponent(playlistId)}/tracks?limit=100`
     );
     return (data.items || []).map(i => i.track).filter(t => t?.id);
   }
