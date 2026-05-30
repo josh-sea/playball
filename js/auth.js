@@ -7,6 +7,7 @@ const SpotifyAuth = (() => {
     expires:  'sp_expires_at',
     verifier: 'sp_code_verifier',
     user:     'sp_user',
+    scopes:   'sp_scopes',
   };
 
   const SCOPES = [
@@ -92,6 +93,11 @@ const SpotifyAuth = (() => {
     localStorage.setItem(KEYS.token,   data.access_token);
     if (data.refresh_token) localStorage.setItem(KEYS.refresh, data.refresh_token);
     localStorage.setItem(KEYS.expires, String(Date.now() + (data.expires_in - 60) * 1000));
+    if (data.scope) localStorage.setItem(KEYS.scopes, data.scope);
+  }
+
+  function hasScope(scope) {
+    return (localStorage.getItem(KEYS.scopes) || '').split(' ').includes(scope);
   }
 
   async function getToken() {
@@ -161,5 +167,5 @@ const SpotifyAuth = (() => {
   }
 
   return { login, handleCallback, getToken, isLoggedIn, logout, getUser,
-           search, startPlayback, getUserPlaylists, getPlaylistTracks, apiCall };
+           search, startPlayback, getUserPlaylists, getPlaylistTracks, apiCall, hasScope };
 })();
