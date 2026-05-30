@@ -512,7 +512,8 @@ function renderImportList(playlists) {
   }
   $('import-list').innerHTML = playlists.map(pl => {
     const img   = pl.images?.[0]?.url || '';
-    const count = pl.tracks?.total ?? 0;
+    const count = pl.tracks?.total;
+    const countStr = count != null ? `${count} track${count !== 1 ? 's' : ''}` : '';
     return `
       <div class="import-pl-item" data-id="${pl.id}" data-name="${esc(pl.name)}">
         ${img
@@ -521,7 +522,7 @@ function renderImportList(playlists) {
         }
         <div class="import-pl-info">
           <div class="import-pl-name">${esc(pl.name)}</div>
-          <div class="import-pl-meta">${count} track${count !== 1 ? 's' : ''}</div>
+          ${countStr ? `<div class="import-pl-meta">${countStr}</div>` : ''}
         </div>
         <span class="import-pl-arrow">›</span>
       </div>`;
@@ -544,8 +545,12 @@ async function importPlaylist(spotifyId, name) {
     if (isMobile()) switchTab('editor');
     toast(`Imported "${name}" — ${tracks.length} tracks`, 'success');
   } catch (e) {
+    const forbidden = e.message.toLowerCase().includes('forbidden') || e.message.includes('403');
+    const msg = forbidden
+      ? 'Access denied — log out and log back in so Spotify can grant playlist permissions.'
+      : e.message;
     $('import-list').innerHTML =
-      `<p class="hint" style="padding:20px;color:var(--danger)">Error: ${esc(e.message)}</p>`;
+      `<p class="hint" style="padding:20px;color:var(--danger)">Error: ${esc(msg)}</p>`;
   }
 }
 
