@@ -495,6 +495,20 @@ function addTrack(track) {
 // ── Spotify playlist import ────────────────────────────────────────────────
 async function openImportModal() {
   $('import-modal').classList.remove('hidden');
+  if (!SpotifyAuth.hasScope('playlist-read-private')) {
+    $('import-list').innerHTML = `
+      <div style="padding:24px;text-align:center">
+        <p style="margin-bottom:16px;color:var(--text-muted);line-height:1.5">
+          Playlist access requires updated permissions.<br>Log out and log back in to grant them.
+        </p>
+        <button id="reauth-btn" class="btn btn-primary">Log out &amp; re-authorize</button>
+      </div>`;
+    $('reauth-btn').addEventListener('click', () => {
+      SpotifyAuth.logout();
+      location.reload();
+    });
+    return;
+  }
   $('import-list').innerHTML = '<p class="hint" style="padding:20px">Loading your Spotify playlists…</p>';
   try {
     const playlists = await SpotifyAuth.getUserPlaylists();
@@ -545,8 +559,10 @@ async function importPlaylist(spotifyId, name) {
     if (isMobile()) switchTab('editor');
     toast(`Imported "${name}" — ${tracks.length} tracks`, 'success');
   } catch (e) {
-    const forbidden = e.message.toLowerCase().includes('forbidden') || e.message.includes('403');
-    const msg = forbidden
+    const scopeErr = e.message.toLowerCase().includes('scope') ||
+                     e.message.toLowerCase().includes('forbidden') ||
+                     e.message.includes('403');
+    const msg = scopeErr
       ? 'Access denied — log out and log back in so Spotify can grant playlist permissions.'
       : e.message;
     $('import-list').innerHTML =
