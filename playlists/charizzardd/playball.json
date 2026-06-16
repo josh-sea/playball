@@ -2,7 +2,7 @@
   "name": "playball",
   "owner": "charizzardd",
   "created": "2026-05-30T01:01:09.549Z",
-  "updated": "2026-06-16T18:32:19.894Z",
+  "updated": "2026-06-16T18:32:48.306Z",
   "tracks": [
     {
       "id": "3ZOEytgrvLwQaqXreDs2Jx",
@@ -131,7 +131,7 @@
       "album": "Chamber Music",
       "image": "https://i.scdn.co/image/ab67616d0000b273c1df3ae7f919f7575adb2bbc",
       "duration_ms": 195386,
-      "start_ms": 0,
+      "start_ms": 3000,
       "end_ms": 195386
     },
     {
