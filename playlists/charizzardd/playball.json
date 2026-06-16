@@ -2,7 +2,7 @@
   "name": "playball",
   "owner": "charizzardd",
   "created": "2026-05-30T01:01:09.549Z",
-  "updated": "2026-05-30T12:40:51.087Z",
+  "updated": "2026-06-16T18:25:58.041Z",
   "tracks": [
     {
       "id": "3ZOEytgrvLwQaqXreDs2Jx",
@@ -23,6 +23,156 @@
       "duration_ms": 136968,
       "start_ms": 13000,
       "end_ms": 136968
+    },
+    {
+      "id": "65G4Ib3w7tgLjUkO5GseN0",
+      "name": "Mr. Brownstone",
+      "artist": "Guns N' Roses",
+      "album": "Appetite For Destruction",
+      "image": "https://i.scdn.co/image/ab67616d0000b27321ebf49b3292c3f0f575f0f5",
+      "duration_ms": 228586,
+      "start_ms": 0,
+      "end_ms": 228586
+    },
+    {
+      "id": "7qe7qHxlIZQDsMXvaYwLo3",
+      "name": "Party at the Beach",
+      "artist": "ZEDDY WILL, Janelle Monáe, tco.dylann",
+      "album": "Party at the Beach",
+      "image": "https://i.scdn.co/image/ab67616d0000b273ed7a8d293ee6d7878f580fef",
+      "duration_ms": 132503,
+      "start_ms": 0,
+      "end_ms": 132503
+    },
+    {
+      "id": "12sXrSIdiqCtB0vKYHNH29",
+      "name": "All I Do Is Win",
+      "artist": "DJ Khaled, T-Pain, Ludacris, Snoop Dogg, Rick Ross",
+      "album": "All I Do Is Win",
+      "image": "https://i.scdn.co/image/ab67616d0000b273e479bce8a73604333282acd7",
+      "duration_ms": 230281,
+      "start_ms": 0,
+      "end_ms": 230281
+    },
+    {
+      "id": "2v49NJk4EhgM4xVkNKrfqc",
+      "name": "Til The Day I Die",
+      "artist": "TobyMac, NF",
+      "album": "This Is Not A Test",
+      "image": "https://i.scdn.co/image/ab67616d0000b273cdb80c1369f29d06b1101612",
+      "duration_ms": 227813,
+      "start_ms": 0,
+      "end_ms": 227813
+    },
+    {
+      "id": "0aGQHMr7bc23Y9Ts84ffop",
+      "name": "Around the World",
+      "artist": "Red Hot Chili Peppers",
+      "album": "Californication (Deluxe Edition)",
+      "image": "https://i.scdn.co/image/ab67616d0000b27394d08ab63e57b0cae74e8595",
+      "duration_ms": 238733,
+      "start_ms": 0,
+      "end_ms": 238733
+    },
+    {
+      "id": "4xkOaSrkexMciUUogZKVTS",
+      "name": "Till I Collapse",
+      "artist": "Eminem, Nate Dogg",
+      "album": "The Eminem Show",
+      "image": "https://i.scdn.co/image/ab67616d0000b2736ca5c90113b30c3c43ffb8f4",
+      "duration_ms": 297786,
+      "start_ms": 0,
+      "end_ms": 297786
+    },
+    {
+      "id": "59XnaH9k3ZYBUpBHM6PAfE",
+      "name": "Separate Ways (Worlds Apart) [2024 Remaster]",
+      "artist": "Journey",
+      "album": "Greatest Hits (2024 Remaster)",
+      "image": "https://i.scdn.co/image/ab67616d0000b27370b5c118e7ac6b8a457e81e8",
+      "duration_ms": 326230,
+      "start_ms": 0,
+      "end_ms": 326230
+    },
+    {
+      "id": "7ACxUo21jtTHzy7ZEV56vU",
+      "name": "Crazy Train",
+      "artist": "Ozzy Osbourne",
+      "album": "Blizzard Of Ozz (40th Anniversary Expanded Edition)",
+      "image": "https://i.scdn.co/image/ab67616d0000b2734936b5b7caeb7524e50fd8cb",
+      "duration_ms": 293183,
+      "start_ms": 0,
+      "end_ms": 293183
+    },
+    {
+      "id": "7N3PAbqfTjSEU1edb2tY8j",
+      "name": "Jump - 2015 Remaster",
+      "artist": "Van Halen",
+      "album": "1984 (Remastered)",
+      "image": "https://i.scdn.co/image/ab67616d0000b273b414c63fb435b622238c15ed",
+      "duration_ms": 241599,
+      "start_ms": 0,
+      "end_ms": 241599
+    },
+    {
+      "id": "5lXLzaZoj4j4hfCYO687bN",
+      "name": "NINAO",
+      "artist": "GIMS",
+      "album": "NINAO",
+      "image": "https://i.scdn.co/image/ab67616d0000b273ad531bf4414d10945209bcac",
+      "duration_ms": 167813,
+      "start_ms": 0,
+      "end_ms": 167813
+    },
+    {
+      "id": "234QpD9ilHoJjnhCVd2fOW",
+      "name": "Sound The Horns",
+      "artist": "Wu-Tang Clan, Sadat X, Inspectah Deck, U-God, RZA",
+      "album": "Chamber Music",
+      "image": "https://i.scdn.co/image/ab67616d0000b273c1df3ae7f919f7575adb2bbc",
+      "duration_ms": 195386,
+      "start_ms": 0,
+      "end_ms": 195386
+    },
+    {
+      "id": "6LAE0cwzbk9Gr1uexKnA2B",
+      "name": "PA QUE LO BAILES (BAILALO ROCKY)",
+      "artist": "Lomiiel",
+      "album": "PA QUE LO BAILES (BAILALO ROCKY)",
+      "image": "https://i.scdn.co/image/ab67616d0000b273b38a36ba3f00c58ab9527df7",
+      "duration_ms": 125548,
+      "start_ms": 0,
+      "end_ms": 125548
+    },
+    {
+      "id": "3glqlA5qY3bbo8UaUDGPnw",
+      "name": "Triumph (feat. Ol' Dirty Bastard, Inspectah Deck, Method Man, Cappadonna, U-God, RZA, GZA, Masta Killa, Ghostface Killah & Raekwon)",
+      "artist": "Wu-Tang Clan, Ol' Dirty Bastard, Inspectah Deck, Method Man, Cappadonna, U-God, RZA, GZA, Masta Killa, Ghostface Killah",
+      "album": "Wu-Tang Forever",
+      "image": "https://i.scdn.co/image/ab67616d0000b27377e8e20e0ac6182f94654a23",
+      "duration_ms": 338186,
+      "start_ms": 0,
+      "end_ms": 338186
+    },
+    {
+      "id": "5OkKOkdVTKFrYi6GWXkMzR",
+      "name": "Volare (Nel Blu Di Pinto Di Blu) - Remastered 1998",
+      "artist": "Dean Martin",
+      "album": "This Is Dean Martin",
+      "image": "https://i.scdn.co/image/ab67616d0000b2732f13fcfe011d340e9c69923e",
+      "duration_ms": 181626,
+      "start_ms": 0,
+      "end_ms": 181626
+    },
+    {
+      "id": "7DuqCAxfOEKBfQgrnWfHrh",
+      "name": "Mambo Italiano",
+      "artist": "Dean Martin",
+      "album": "Dean Martin: The Capitol Recordings, Vol. 5 (1954)",
+      "image": "https://i.scdn.co/image/ab67616d0000b273ee552fb77ec80f763711aff7",
+      "duration_ms": 142506,
+      "start_ms": 0,
+      "end_ms": 142506
     }
   ]
 }
