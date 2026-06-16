@@ -2,7 +2,7 @@
   "name": "playball",
   "owner": "charizzardd",
   "created": "2026-05-30T01:01:09.549Z",
-  "updated": "2026-06-16T18:31:09.641Z",
+  "updated": "2026-06-16T18:31:33.290Z",
   "tracks": [
     {
       "id": "3ZOEytgrvLwQaqXreDs2Jx",
@@ -101,7 +101,7 @@
       "album": "Blizzard Of Ozz (40th Anniversary Expanded Edition)",
       "image": "https://i.scdn.co/image/ab67616d0000b2734936b5b7caeb7524e50fd8cb",
       "duration_ms": 293183,
-      "start_ms": 0,
+      "start_ms": 18000,
       "end_ms": 293183
     },
     {
