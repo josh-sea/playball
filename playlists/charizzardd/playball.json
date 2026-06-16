@@ -2,7 +2,7 @@
   "name": "playball",
   "owner": "charizzardd",
   "created": "2026-05-30T01:01:09.549Z",
-  "updated": "2026-06-16T18:31:33.290Z",
+  "updated": "2026-06-16T18:32:19.894Z",
   "tracks": [
     {
       "id": "3ZOEytgrvLwQaqXreDs2Jx",
@@ -121,7 +121,7 @@
       "album": "NINAO",
       "image": "https://i.scdn.co/image/ab67616d0000b273ad531bf4414d10945209bcac",
       "duration_ms": 167813,
-      "start_ms": 0,
+      "start_ms": 7000,
       "end_ms": 167813
     },
     {
