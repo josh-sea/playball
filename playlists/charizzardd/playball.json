@@ -2,7 +2,7 @@
   "name": "playball",
   "owner": "charizzardd",
   "created": "2026-05-30T01:01:09.549Z",
-  "updated": "2026-06-16T18:33:52.658Z",
+  "updated": "2026-06-16T18:34:38.027Z",
   "tracks": [
     {
       "id": "3ZOEytgrvLwQaqXreDs2Jx",
@@ -171,7 +171,7 @@
       "album": "Dean Martin: The Capitol Recordings, Vol. 5 (1954)",
       "image": "https://i.scdn.co/image/ab67616d0000b273ee552fb77ec80f763711aff7",
       "duration_ms": 142506,
-      "start_ms": 0,
+      "start_ms": 24000,
       "end_ms": 142506
     }
   ]
