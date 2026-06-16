@@ -201,8 +201,12 @@ async function initSDK() {
         getOAuthToken: async cb => cb(await SpotifyAuth.getToken()),
         volume: 0.8,
       });
-      S.sdkPlayer.addListener('ready',         ({ device_id }) => { S.deviceId = device_id; resolve(); });
-      S.sdkPlayer.addListener('not_ready',      ()             => { S.deviceId = null; });
+      S.sdkPlayer.addListener('ready', ({ device_id }) => { S.deviceId = device_id; resolve(); });
+      S.sdkPlayer.addListener('not_ready', () => {
+        S.deviceId = null;
+        // Silently try to reconnect; ready listener above will restore S.deviceId
+        setTimeout(() => S.sdkPlayer?.connect().catch(console.warn), 2000);
+      });
       S.sdkPlayer.addListener('account_error',  ({ message })  => {
         toast('Spotify Premium required for playback.', 'error');
         console.warn('account_error:', message);
@@ -224,10 +228,23 @@ async function initSDK() {
   });
 }
 
+// Reconnects the SDK player if the device has gone away, with up to 8s wait.
+async function ensureConnected() {
+  if (S.deviceId) return;
+  if (!S.sdkPlayer) throw new Error('Player not initialized — Spotify Premium required');
+  toast('Reconnecting player…', '');
+  await S.sdkPlayer.connect();
+  for (let i = 0; i < 32; i++) {
+    await new Promise(r => setTimeout(r, 250));
+    if (S.deviceId) { toast('Player reconnected', 'success'); return; }
+  }
+  throw new Error('Player did not reconnect — try refreshing');
+}
+
 async function playAt(i) {
   const pl = currentPlaylist();
   if (!pl || i < 0 || i >= pl.tracks.length) return;
-  if (!S.deviceId) { toast('Player not ready. Spotify Premium required.', 'error'); return; }
+  try { await ensureConnected(); } catch (err) { toast(err.message, 'error'); return; }
 
   clearTimeout(S.stopTimer);
   clearInterval(S.progTimer);
@@ -241,8 +258,20 @@ async function playAt(i) {
   try {
     await SpotifyAuth.startPlayback(S.deviceId, track.id, S.segStart);
   } catch (err) {
-    toast(err.message, 'error');
-    return;
+    // Device may have just dropped — reconnect once and retry
+    if (err.message.toLowerCase().includes('device') || err.message.includes('404') || err.message.includes('502')) {
+      S.deviceId = null;
+      try {
+        await ensureConnected();
+        await SpotifyAuth.startPlayback(S.deviceId, track.id, S.segStart);
+      } catch (err2) {
+        toast(err2.message, 'error');
+        return;
+      }
+    } else {
+      toast(err.message, 'error');
+      return;
+    }
   }
 
   S.playing = true;
@@ -669,6 +698,13 @@ async function launchApp() {
   initSDK()
     .then(() => { toast('Player ready', 'success'); initScrubbing(); })
     .catch(err => { console.warn('SDK:', err); toast('Playback unavailable (Premium required).', 'error'); });
+
+  // Reconnect when the user returns to the app (tab focus or phone unlock)
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && S.sdkPlayer && !S.deviceId) {
+      S.sdkPlayer.connect().catch(console.warn);
+    }
+  });
 
   // Search
   $('search-input').addEventListener('input', e => {
