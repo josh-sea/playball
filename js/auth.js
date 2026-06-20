@@ -74,7 +74,9 @@ const SpotifyAuth = (() => {
       const e = await res.json().catch(() => ({}));
       throw new Error(e.error_description || 'Token exchange failed');
     }
-    _storeTokens(await res.json());
+    const data = await res.json();
+    _storeTokens(data);
+    console.log('[Auth] Granted scopes:', data.scope || '(none in response)');
     sessionStorage.removeItem(KEYS.verifier);
   }
 

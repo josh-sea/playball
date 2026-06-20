@@ -555,10 +555,16 @@ function _isScopeErr(e) {
 
 function _reauthHtml(pad) {
   return `<div style="padding:${pad};text-align:center">
-    <p style="color:var(--muted);margin-bottom:14px;line-height:1.5">
-      Spotify needs updated permissions.<br>Tap below — it only takes a moment.
+    <p style="color:var(--muted);margin-bottom:10px;line-height:1.5">
+      Spotify needs updated permissions. Tap below to reconnect.
     </p>
-    <button class="reauth-trigger btn btn-primary btn-sm">Authorize playlist access</button>
+    <button class="reauth-trigger btn btn-primary btn-sm">Reconnect Spotify</button>
+    <p style="color:var(--muted);margin-top:14px;font-size:12px;line-height:1.6">
+      If this keeps looping, you need to fully reset the app's Spotify access:<br>
+      1. Go to <a href="https://www.spotify.com/account/apps" target="_blank" rel="noopener" style="color:var(--accent)">spotify.com/account/apps</a><br>
+      2. Find <strong>Timed Playlist Editor</strong> → click <strong>Remove Access</strong><br>
+      3. Come back and log in again fresh
+    </p>
   </div>`;
 }
 
@@ -622,8 +628,18 @@ async function importPlaylist(spotifyId, name) {
     toast(`Imported "${name}" — ${tracks.length} tracks`, 'success');
   } catch (e) {
     const el = $('import-list');
-    if (_isScopeErr(e)) { el.innerHTML = _reauthHtml('24px'); _bindReauth(el); }
-    else el.innerHTML = `<p class="hint" style="padding:20px;color:var(--danger)">Error: ${esc(e.message)}</p>`;
+    const storedScopes = localStorage.getItem('sp_scopes') || '(none stored)';
+    console.error('importPlaylist failed:', e.message, '\nStored scopes:', storedScopes);
+    if (_isScopeErr(e)) {
+      el.innerHTML = _reauthHtml('24px') +
+        `<p style="font-size:11px;color:var(--muted);text-align:center;padding:4px 16px 12px;line-height:1.5">
+          Error: <code>${esc(e.message)}</code><br>
+          Scopes: <code style="word-break:break-all">${esc(storedScopes)}</code>
+        </p>`;
+      _bindReauth(el);
+    } else {
+      el.innerHTML = `<p class="hint" style="padding:20px;color:var(--danger)">Error: ${esc(e.message)}</p>`;
+    }
   }
 }
 
