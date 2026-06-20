@@ -193,34 +193,45 @@ function removeTrack(i) {
 }
 
 // ── Player ─────────────────────────────────────────────────────────────────
+function _createPlayer() {
+  if (S.sdkPlayer) { try { S.sdkPlayer.disconnect(); } catch {} }
+  S.sdkPlayer = null;
+  S.deviceId  = null;
+
+  return new Promise((resolve, reject) => {
+    const player = new Spotify.Player({
+      name: 'Timed Playlist Editor',
+      getOAuthToken: async cb => cb(await SpotifyAuth.getToken()),
+      volume: 0.8,
+    });
+    const t = setTimeout(() => reject(new Error('Player connect timed out')), 10000);
+    player.addListener('ready', ({ device_id }) => {
+      clearTimeout(t);
+      S.sdkPlayer = player;
+      S.deviceId  = device_id;
+      resolve();
+    });
+    player.addListener('not_ready', () => {
+      S.deviceId = null;
+      setTimeout(() => S.sdkPlayer?.connect().catch(console.warn), 2000);
+    });
+    player.addListener('account_error', () =>
+      toast('Spotify Premium required for playback.', 'error'));
+    player.addListener('initialization_error', ({ message }) => { clearTimeout(t); reject(new Error(message)); });
+    player.addListener('authentication_error', ({ message }) => { clearTimeout(t); reject(new Error(message)); });
+    player.addListener('player_state_changed', st => {
+      if (!st) return;
+      S.playing = !st.paused;
+      syncPPBtns();
+    });
+    player.connect().then(ok => { if (!ok) { clearTimeout(t); reject(new Error('SDK connect failed')); } });
+  });
+}
+
 async function initSDK() {
   return new Promise((resolve, reject) => {
-    window.onSpotifyWebPlaybackSDKReady = async () => {
-      S.sdkPlayer = new Spotify.Player({
-        name: 'Timed Playlist Editor',
-        getOAuthToken: async cb => cb(await SpotifyAuth.getToken()),
-        volume: 0.8,
-      });
-      S.sdkPlayer.addListener('ready', ({ device_id }) => { S.deviceId = device_id; resolve(); });
-      S.sdkPlayer.addListener('not_ready', () => {
-        S.deviceId = null;
-        // Silently try to reconnect; ready listener above will restore S.deviceId
-        setTimeout(() => S.sdkPlayer?.connect().catch(console.warn), 2000);
-      });
-      S.sdkPlayer.addListener('account_error',  ({ message })  => {
-        toast('Spotify Premium required for playback.', 'error');
-        console.warn('account_error:', message);
-      });
-      S.sdkPlayer.addListener('initialization_error', ({ message }) => reject(new Error(message)));
-      S.sdkPlayer.addListener('authentication_error', ({ message }) => reject(new Error(message)));
-      S.sdkPlayer.addListener('player_state_changed', st => {
-        if (!st) return;
-        S.playing = !st.paused;
-        syncPPBtns();
-      });
-      const ok = await S.sdkPlayer.connect();
-      if (!ok) reject(new Error('SDK connect failed'));
-    };
+    window.onSpotifyWebPlaybackSDKReady = () =>
+      _createPlayer().then(resolve).catch(reject);
     const sc = document.createElement('script');
     sc.src = 'https://sdk.scdn.co/spotify-player.js';
     sc.onerror = () => reject(new Error('Failed to load Spotify SDK'));
@@ -228,17 +239,29 @@ async function initSDK() {
   });
 }
 
-// Reconnects the SDK player if the device has gone away, with up to 8s wait.
+// If the device is gone, try .connect() first (fast path), then full re-init.
 async function ensureConnected() {
   if (S.deviceId) return;
-  if (!S.sdkPlayer) throw new Error('Player not initialized — Spotify Premium required');
-  toast('Reconnecting player…', '');
-  await S.sdkPlayer.connect();
-  for (let i = 0; i < 32; i++) {
-    await new Promise(r => setTimeout(r, 250));
-    if (S.deviceId) { toast('Player reconnected', 'success'); return; }
+  if (!S.sdkPlayer && !window.Spotify) throw new Error('Player not initialized — Spotify Premium required');
+
+  toast('Reconnecting…', '');
+
+  // Fast path: existing player might just need a nudge
+  if (S.sdkPlayer) {
+    S.sdkPlayer.connect().catch(console.warn);
+    for (let i = 0; i < 16; i++) {
+      await new Promise(r => setTimeout(r, 250));
+      if (S.deviceId) { toast('Player ready', 'success'); return; }
+    }
   }
-  throw new Error('Player did not reconnect — try refreshing');
+
+  // Slow path: tear down and recreate the player entirely
+  try {
+    await _createPlayer();
+    toast('Player ready', 'success');
+  } catch (e) {
+    throw new Error('Could not reconnect to Spotify — check your connection');
+  }
 }
 
 async function playAt(i) {
