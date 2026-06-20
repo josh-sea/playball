@@ -547,29 +547,37 @@ function addTrack(track) {
 }
 
 // ── Spotify playlist import ────────────────────────────────────────────────
+
+function _isScopeErr(e) {
+  const m = (e.message || '').toLowerCase();
+  return m.includes('forbidden') || m.includes('403') || m.includes('scope') || m.includes('denied');
+}
+
+function _reauthHtml(pad) {
+  return `<div style="padding:${pad};text-align:center">
+    <p style="color:var(--muted);margin-bottom:14px;line-height:1.5">
+      Spotify needs updated permissions.<br>Tap below — it only takes a moment.
+    </p>
+    <button class="reauth-trigger btn btn-primary btn-sm">Authorize playlist access</button>
+  </div>`;
+}
+
+function _bindReauth(container) {
+  container.querySelector('.reauth-trigger')?.addEventListener('click', () => {
+    SpotifyAuth.logout(); SpotifyAuth.login(true);
+  });
+}
+
 async function openImportModal() {
   $('import-modal').classList.remove('hidden');
-  if (!SpotifyAuth.hasScope('playlist-read-private')) {
-    $('import-list').innerHTML = `
-      <div style="padding:24px;text-align:center">
-        <p style="margin-bottom:16px;color:var(--text-muted);line-height:1.5">
-          Spotify needs to approve playlist access.<br>Click below — Spotify will show an approval screen.
-        </p>
-        <button id="reauth-btn" class="btn btn-primary">Grant playlist access</button>
-      </div>`;
-    $('reauth-btn').addEventListener('click', () => {
-      SpotifyAuth.logout();
-      SpotifyAuth.login(true);
-    });
-    return;
-  }
   $('import-list').innerHTML = '<p class="hint" style="padding:20px">Loading your Spotify playlists…</p>';
   try {
     const playlists = await SpotifyAuth.getUserPlaylists();
     renderImportList(playlists);
   } catch (e) {
-    $('import-list').innerHTML =
-      `<p class="hint" style="padding:20px;color:var(--danger)">Error: ${esc(e.message)}</p>`;
+    const el = $('import-list');
+    if (_isScopeErr(e)) { el.innerHTML = _reauthHtml('24px'); _bindReauth(el); }
+    else el.innerHTML = `<p class="hint" style="padding:20px;color:var(--danger)">Error: ${esc(e.message)}</p>`;
   }
 }
 
@@ -613,14 +621,9 @@ async function importPlaylist(spotifyId, name) {
     if (isMobile()) switchTab('editor');
     toast(`Imported "${name}" — ${tracks.length} tracks`, 'success');
   } catch (e) {
-    const scopeErr = e.message.toLowerCase().includes('scope') ||
-                     e.message.toLowerCase().includes('forbidden') ||
-                     e.message.includes('403');
-    const msg = scopeErr
-      ? 'Access denied — log out and log back in so Spotify can grant playlist permissions.'
-      : e.message;
-    $('import-list').innerHTML =
-      `<p class="hint" style="padding:20px;color:var(--danger)">Error: ${esc(msg)}</p>`;
+    const el = $('import-list');
+    if (_isScopeErr(e)) { el.innerHTML = _reauthHtml('24px'); _bindReauth(el); }
+    else el.innerHTML = `<p class="hint" style="padding:20px;color:var(--danger)">Error: ${esc(e.message)}</p>`;
   }
 }
 
@@ -722,16 +725,6 @@ async function toggleLineupPicker() {
   picker.classList.remove('hidden');
   picker.innerHTML = '<p class="hint" style="padding:14px">Loading your playlists…</p>';
 
-  if (!SpotifyAuth.hasScope('playlist-read-private')) {
-    picker.innerHTML = `
-      <div style="padding:16px;text-align:center">
-        <p style="color:var(--muted);margin-bottom:12px;line-height:1.5">Playlist access needs updated permissions.</p>
-        <button id="lu-reauth-btn" class="btn btn-primary btn-sm">Grant Access</button>
-      </div>`;
-    $('lu-reauth-btn').addEventListener('click', () => { SpotifyAuth.logout(); SpotifyAuth.login(true); });
-    return;
-  }
-
   try {
     const pls = await SpotifyAuth.getUserPlaylists();
     if (!pls.length) { picker.innerHTML = '<p class="hint" style="padding:14px">No playlists found.</p>'; return; }
@@ -746,7 +739,8 @@ async function toggleLineupPicker() {
       el.addEventListener('click', () => loadLineupPlaylist(el.dataset.id, el.dataset.name))
     );
   } catch (e) {
-    picker.innerHTML = `<p class="hint" style="padding:14px;color:var(--danger)">Error: ${esc(e.message)}</p>`;
+    if (_isScopeErr(e)) { picker.innerHTML = _reauthHtml('14px'); _bindReauth(picker); }
+    else picker.innerHTML = `<p class="hint" style="padding:14px;color:var(--danger)">Error: ${esc(e.message)}</p>`;
   }
 }
 
@@ -814,11 +808,6 @@ function _lineupEntriesFromDOM() {
 
 async function syncLineupToSpotify() {
   if (!L.playlistId) return;
-  if (!SpotifyAuth.hasScope('playlist-modify-private') && !SpotifyAuth.hasScope('playlist-modify-public')) {
-    toast('Sync needs updated Spotify permissions — re-authorizing…', '');
-    setTimeout(() => { SpotifyAuth.logout(); SpotifyAuth.login(true); }, 1500);
-    return;
-  }
   const btn = $('lineup-sync-btn');
   btn.disabled = true; btn.textContent = 'Syncing…';
   try {
@@ -826,7 +815,12 @@ async function syncLineupToSpotify() {
     await SpotifyAuth.reorderPlaylist(L.playlistId, L.entries.map(e => e.trackUri));
     toast('Playlist order synced to Spotify!', 'success');
   } catch (e) {
-    toast('Sync failed: ' + e.message, 'error');
+    if (_isScopeErr(e)) {
+      toast('Needs playlist permissions — re-authorizing…', '');
+      setTimeout(() => { SpotifyAuth.logout(); SpotifyAuth.login(true); }, 1500);
+    } else {
+      toast('Sync failed: ' + e.message, 'error');
+    }
   } finally {
     btn.disabled = false; btn.textContent = 'Sync to Spotify';
   }
