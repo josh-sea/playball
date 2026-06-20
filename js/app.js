@@ -555,10 +555,16 @@ function _isScopeErr(e) {
 
 function _reauthHtml(pad) {
   return `<div style="padding:${pad};text-align:center">
-    <p style="color:var(--muted);margin-bottom:14px;line-height:1.5">
-      Spotify needs updated permissions.<br>Tap below — it only takes a moment.
+    <p style="color:var(--muted);margin-bottom:10px;line-height:1.5">
+      Spotify needs updated permissions. Tap below to reconnect.
     </p>
-    <button class="reauth-trigger btn btn-primary btn-sm">Authorize playlist access</button>
+    <button class="reauth-trigger btn btn-primary btn-sm">Reconnect Spotify</button>
+    <p style="color:var(--muted);margin-top:14px;font-size:12px;line-height:1.6">
+      If this keeps looping, you need to fully reset the app's Spotify access:<br>
+      1. Go to <a href="https://www.spotify.com/account/apps" target="_blank" rel="noopener" style="color:var(--accent)">spotify.com/account/apps</a><br>
+      2. Find <strong>Timed Playlist Editor</strong> → click <strong>Remove Access</strong><br>
+      3. Come back and log in again fresh
+    </p>
   </div>`;
 }
 
