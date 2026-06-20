@@ -337,6 +337,62 @@ header {
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 code { background: #111; border-radius: 4px; padding: 1px 5px; font-size: 12px; }
 
+/* ── Lineup Manager ────────────────────────────────────────────────────────── */
+.lineup {
+  display: none; flex: 1; flex-direction: column; overflow: hidden;
+  border-left: 1px solid var(--border);
+}
+#app.show-lineup .editor  { display: none; }
+#app.show-lineup .lineup  { display: flex; }
+
+.lineup-toggle-btn { }
+.sidebar-import-btn.active { color: var(--green); }
+
+.lineup-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px; border-bottom: 1px solid var(--border);
+  gap: 10px; flex-wrap: wrap; flex-shrink: 0;
+}
+.lineup-hl { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.lineup-hr { display: flex; align-items: center; gap: 8px; }
+.lineup-pl-name { font-size: 14px; font-weight: 600; color: var(--muted); }
+
+.lineup-picker {
+  background: var(--bg-up); border-bottom: 1px solid var(--border);
+  max-height: 260px; overflow-y: auto; flex-shrink: 0;
+}
+.lu-pick-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px; cursor: pointer;
+  border-bottom: 1px solid var(--border); transition: background .1s;
+}
+.lu-pick-item:last-child { border-bottom: none; }
+.lu-pick-item:hover { background: var(--bg-hover); }
+.lu-pick-img { width: 40px; height: 40px; border-radius: 4px; object-fit: cover; flex-shrink: 0; }
+.lu-pick-img--empty { background: var(--bg-card); }
+.lu-pick-name { font-size: 14px; font-weight: 500; }
+
+.lineup-list { flex: 1; overflow-y: auto; }
+
+.lu-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 16px; border-bottom: 1px solid var(--border);
+  transition: background .1s; user-select: none;
+}
+.lu-item:hover { background: var(--bg-hover); }
+.lu-item.lu-dragging { opacity: 0.35; background: var(--bg-card); }
+.lu-drag {
+  font-size: 20px; line-height: 1; color: var(--dim);
+  cursor: grab; padding: 4px 2px; touch-action: none; flex-shrink: 0;
+}
+.lu-drag:active { cursor: grabbing; color: var(--muted); }
+.lu-art { width: 42px; height: 42px; border-radius: 4px; object-fit: cover; flex-shrink: 0; }
+.lu-art--empty { background: var(--bg-card); }
+.lu-info { flex: 1; min-width: 0; }
+.lu-song   { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lu-artist { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.lu-name   { width: 150px; font-size: 13px; padding: 6px 10px; flex-shrink: 0; }
+
 /* ── Mobile responsive ─────────────────────────────────────────────────── */
 @media (max-width: 640px) {
   :root { --header-h: 52px; --player-h: 0px; --nav-h: 58px; }
@@ -373,4 +429,10 @@ code { background: #111; border-radius: 4px; padding: 1px 5px; font-size: 12px; 
   .t-time-input { width: 56px; font-size: 11px; }
   .t-play-btn { width: 32px; height: 32px; font-size: 12px; }
   .t-rm-btn   { width: 28px; height: 28px; font-size: 20px; }
+  .lineup { display: none; width: 100%; border-left: none; }
+  .lineup.mob-active { display: flex; flex: 1; }
+  #app.show-lineup .editor { display: flex; }   /* reset desktop rule */
+  #app.show-lineup .lineup { display: none; }   /* mobile uses mob-active instead */
+  #app.show-lineup .lineup.mob-active { display: flex; flex: 1; }
+  .lu-name { width: 130px; }
 }
