@@ -51,13 +51,15 @@ function esc(str) {
 // ── Mobile tab switching ───────────────────────────────────────────────────
 function switchTab(tab) {
   S.mobileTab = tab;
-  const map = { library: '.sidebar', editor: '.editor', playing: '.mobile-playing' };
+  const map = { library: '.sidebar', editor: '.editor', playing: '.mobile-playing', lineup: '.lineup' };
   Object.entries(map).forEach(([t, sel]) =>
     document.querySelector(sel)?.classList.toggle('mob-active', t === tab)
   );
   document.querySelectorAll('.mnav-btn').forEach(btn =>
     btn.classList.toggle('active', btn.dataset.tab === tab)
   );
+  $('app').classList.toggle('show-lineup', tab === 'lineup');
+  $('lineup-toggle-btn')?.classList.toggle('active', tab === 'lineup');
 }
 
 // ── Playlist helpers ───────────────────────────────────────────────────────
@@ -193,34 +195,45 @@ function removeTrack(i) {
 }
 
 // ── Player ─────────────────────────────────────────────────────────────────
+function _createPlayer() {
+  if (S.sdkPlayer) { try { S.sdkPlayer.disconnect(); } catch {} }
+  S.sdkPlayer = null;
+  S.deviceId  = null;
+
+  return new Promise((resolve, reject) => {
+    const player = new Spotify.Player({
+      name: 'Timed Playlist Editor',
+      getOAuthToken: async cb => cb(await SpotifyAuth.getToken()),
+      volume: 0.8,
+    });
+    const t = setTimeout(() => reject(new Error('Player connect timed out')), 10000);
+    player.addListener('ready', ({ device_id }) => {
+      clearTimeout(t);
+      S.sdkPlayer = player;
+      S.deviceId  = device_id;
+      resolve();
+    });
+    player.addListener('not_ready', () => {
+      S.deviceId = null;
+      setTimeout(() => S.sdkPlayer?.connect().catch(console.warn), 2000);
+    });
+    player.addListener('account_error', () =>
+      toast('Spotify Premium required for playback.', 'error'));
+    player.addListener('initialization_error', ({ message }) => { clearTimeout(t); reject(new Error(message)); });
+    player.addListener('authentication_error', ({ message }) => { clearTimeout(t); reject(new Error(message)); });
+    player.addListener('player_state_changed', st => {
+      if (!st) return;
+      S.playing = !st.paused;
+      syncPPBtns();
+    });
+    player.connect().then(ok => { if (!ok) { clearTimeout(t); reject(new Error('SDK connect failed')); } });
+  });
+}
+
 async function initSDK() {
   return new Promise((resolve, reject) => {
-    window.onSpotifyWebPlaybackSDKReady = async () => {
-      S.sdkPlayer = new Spotify.Player({
-        name: 'Timed Playlist Editor',
-        getOAuthToken: async cb => cb(await SpotifyAuth.getToken()),
-        volume: 0.8,
-      });
-      S.sdkPlayer.addListener('ready', ({ device_id }) => { S.deviceId = device_id; resolve(); });
-      S.sdkPlayer.addListener('not_ready', () => {
-        S.deviceId = null;
-        // Silently try to reconnect; ready listener above will restore S.deviceId
-        setTimeout(() => S.sdkPlayer?.connect().catch(console.warn), 2000);
-      });
-      S.sdkPlayer.addListener('account_error',  ({ message })  => {
-        toast('Spotify Premium required for playback.', 'error');
-        console.warn('account_error:', message);
-      });
-      S.sdkPlayer.addListener('initialization_error', ({ message }) => reject(new Error(message)));
-      S.sdkPlayer.addListener('authentication_error', ({ message }) => reject(new Error(message)));
-      S.sdkPlayer.addListener('player_state_changed', st => {
-        if (!st) return;
-        S.playing = !st.paused;
-        syncPPBtns();
-      });
-      const ok = await S.sdkPlayer.connect();
-      if (!ok) reject(new Error('SDK connect failed'));
-    };
+    window.onSpotifyWebPlaybackSDKReady = () =>
+      _createPlayer().then(resolve).catch(reject);
     const sc = document.createElement('script');
     sc.src = 'https://sdk.scdn.co/spotify-player.js';
     sc.onerror = () => reject(new Error('Failed to load Spotify SDK'));
@@ -228,17 +241,29 @@ async function initSDK() {
   });
 }
 
-// Reconnects the SDK player if the device has gone away, with up to 8s wait.
+// If the device is gone, try .connect() first (fast path), then full re-init.
 async function ensureConnected() {
   if (S.deviceId) return;
-  if (!S.sdkPlayer) throw new Error('Player not initialized — Spotify Premium required');
-  toast('Reconnecting player…', '');
-  await S.sdkPlayer.connect();
-  for (let i = 0; i < 32; i++) {
-    await new Promise(r => setTimeout(r, 250));
-    if (S.deviceId) { toast('Player reconnected', 'success'); return; }
+  if (!S.sdkPlayer && !window.Spotify) throw new Error('Player not initialized — Spotify Premium required');
+
+  toast('Reconnecting…', '');
+
+  // Fast path: existing player might just need a nudge
+  if (S.sdkPlayer) {
+    S.sdkPlayer.connect().catch(console.warn);
+    for (let i = 0; i < 16; i++) {
+      await new Promise(r => setTimeout(r, 250));
+      if (S.deviceId) { toast('Player ready', 'success'); return; }
+    }
   }
-  throw new Error('Player did not reconnect — try refreshing');
+
+  // Slow path: tear down and recreate the player entirely
+  try {
+    await _createPlayer();
+    toast('Player ready', 'success');
+  } catch (e) {
+    throw new Error('Could not reconnect to Spotify — check your connection');
+  }
 }
 
 async function playAt(i) {
@@ -676,6 +701,195 @@ async function applyGhToken(token) {
   } catch (e) { toast('GitHub token error: ' + e.message, 'error'); GitHub.clearToken(); }
 }
 
+// ── Lineup ─────────────────────────────────────────────────────────────────
+const L = {
+  playlistId:   null,
+  playlistName: null,
+  entries:      [],   // { trackId, trackUri, name, artist, image, playerName }
+  sha:          null,
+  path:         null,
+  pickerOpen:   false,
+};
+
+async function toggleLineupPicker() {
+  const picker = $('lineup-picker');
+  if (L.pickerOpen) {
+    picker.classList.add('hidden');
+    L.pickerOpen = false;
+    return;
+  }
+  L.pickerOpen = true;
+  picker.classList.remove('hidden');
+  picker.innerHTML = '<p class="hint" style="padding:14px">Loading your playlists…</p>';
+
+  if (!SpotifyAuth.hasScope('playlist-read-private')) {
+    picker.innerHTML = `
+      <div style="padding:16px;text-align:center">
+        <p style="color:var(--muted);margin-bottom:12px;line-height:1.5">Playlist access needs updated permissions.</p>
+        <button id="lu-reauth-btn" class="btn btn-primary btn-sm">Grant Access</button>
+      </div>`;
+    $('lu-reauth-btn').addEventListener('click', () => { SpotifyAuth.logout(); SpotifyAuth.login(true); });
+    return;
+  }
+
+  try {
+    const pls = await SpotifyAuth.getUserPlaylists();
+    if (!pls.length) { picker.innerHTML = '<p class="hint" style="padding:14px">No playlists found.</p>'; return; }
+    picker.innerHTML = pls.map(pl => {
+      const img = pl.images?.[0]?.url || '';
+      return `<div class="lu-pick-item" data-id="${pl.id}" data-name="${esc(pl.name)}">
+        ${img ? `<img class="lu-pick-img" src="${img}" alt="" loading="lazy" />` : '<div class="lu-pick-img lu-pick-img--empty"></div>'}
+        <span class="lu-pick-name">${esc(pl.name)}</span>
+      </div>`;
+    }).join('');
+    picker.querySelectorAll('.lu-pick-item').forEach(el =>
+      el.addEventListener('click', () => loadLineupPlaylist(el.dataset.id, el.dataset.name))
+    );
+  } catch (e) {
+    picker.innerHTML = `<p class="hint" style="padding:14px;color:var(--danger)">Error: ${esc(e.message)}</p>`;
+  }
+}
+
+async function loadLineupPlaylist(playlistId, playlistName) {
+  $('lineup-picker').classList.add('hidden');
+  L.pickerOpen = false;
+  $('lineup-pl-name').textContent = playlistName;
+  $('lineup-list').innerHTML = '<p class="hint" style="padding:28px 20px">Loading tracks…</p>';
+  L.playlistId = playlistId; L.playlistName = playlistName;
+  L.entries = []; L.sha = null; L.path = null;
+
+  try {
+    const tracks = await SpotifyAuth.getPlaylistTracks(playlistId);
+
+    let savedNames = {};
+    if (GitHub.hasToken()) {
+      try {
+        const saved = await GitHub.loadLineup(playlistId);
+        if (saved) { savedNames = saved.lineup.names || {}; L.sha = saved.sha; L.path = saved.path; }
+      } catch {}
+    }
+
+    L.entries = tracks.map(t => ({
+      trackId:    t.id,
+      trackUri:   `spotify:track:${t.id}`,
+      name:       t.name,
+      artist:     (t.artists || []).map(a => a.name).join(', '),
+      image:      t.album?.images?.[0]?.url || '',
+      playerName: savedNames[t.id] || '',
+    }));
+
+    renderLineup();
+    $('lineup-sync-btn').classList.remove('hidden');
+    $('lineup-save-btn').classList.toggle('hidden', !GitHub.hasToken());
+  } catch (e) {
+    $('lineup-list').innerHTML = `<p class="hint" style="padding:28px 20px;color:var(--danger)">Error: ${esc(e.message)}</p>`;
+  }
+}
+
+function renderLineup() {
+  const list = $('lineup-list');
+  if (!L.entries.length) {
+    list.innerHTML = '<p class="hint" style="padding:28px 20px">No tracks in this playlist.</p>';
+    return;
+  }
+  list.innerHTML = L.entries.map(e => `
+    <div class="lu-item" data-id="${e.trackId}">
+      <span class="lu-drag" title="Drag to reorder">⠿</span>
+      ${e.image ? `<img class="lu-art" src="${e.image}" alt="" loading="lazy" />` : '<div class="lu-art lu-art--empty"></div>'}
+      <div class="lu-info">
+        <div class="lu-song">${esc(e.name)}</div>
+        <div class="lu-artist">${esc(e.artist)}</div>
+      </div>
+      <input class="lu-name" type="text" placeholder="Player name…" value="${esc(e.playerName)}" />
+    </div>`).join('');
+}
+
+function _lineupEntriesFromDOM() {
+  const byId = Object.fromEntries(L.entries.map(e => [e.trackId, e]));
+  return [...$('lineup-list').querySelectorAll('.lu-item')].map(el => ({
+    ...byId[el.dataset.id],
+    playerName: el.querySelector('.lu-name')?.value || byId[el.dataset.id]?.playerName || '',
+  })).filter(Boolean);
+}
+
+async function syncLineupToSpotify() {
+  if (!L.playlistId) return;
+  if (!SpotifyAuth.hasScope('playlist-modify-private') && !SpotifyAuth.hasScope('playlist-modify-public')) {
+    toast('Sync needs updated Spotify permissions — re-authorizing…', '');
+    setTimeout(() => { SpotifyAuth.logout(); SpotifyAuth.login(true); }, 1500);
+    return;
+  }
+  const btn = $('lineup-sync-btn');
+  btn.disabled = true; btn.textContent = 'Syncing…';
+  try {
+    L.entries = _lineupEntriesFromDOM();
+    await SpotifyAuth.reorderPlaylist(L.playlistId, L.entries.map(e => e.trackUri));
+    toast('Playlist order synced to Spotify!', 'success');
+  } catch (e) {
+    toast('Sync failed: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Sync to Spotify';
+  }
+}
+
+async function saveLineupNames() {
+  if (!L.playlistId || !GitHub.hasToken()) return;
+  const btn = $('lineup-save-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const names = {};
+    $('lineup-list').querySelectorAll('.lu-item').forEach(el => {
+      names[el.dataset.id] = el.querySelector('.lu-name')?.value || '';
+    });
+    const result = await GitHub.saveLineup(L.playlistId, {
+      playlistId: L.playlistId, playlistName: L.playlistName, names,
+    }, L.sha);
+    L.sha = result.sha; L.path = result.path;
+    toast('Names saved!', 'success');
+  } catch (e) {
+    toast('Save failed: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save Names';
+  }
+}
+
+function initLineupDrag() {
+  const list = $('lineup-list');
+  let dragging = null;
+  list.addEventListener('pointerdown', e => {
+    const handle = e.target.closest('.lu-drag');
+    if (!handle) return;
+    const item = handle.closest('.lu-item');
+    if (!item) return;
+    e.preventDefault();
+    dragging = item;
+    item.classList.add('lu-dragging');
+    handle.setPointerCapture(e.pointerId);
+  }, { passive: false });
+
+  list.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    const siblings = [...list.querySelectorAll('.lu-item:not(.lu-dragging)')];
+    const target = siblings.find(el => {
+      const r = el.getBoundingClientRect();
+      return e.clientY > r.top && e.clientY < r.bottom;
+    });
+    if (target) {
+      const r = target.getBoundingClientRect();
+      list.insertBefore(dragging, e.clientY < r.top + r.height / 2 ? target : target.nextSibling);
+    }
+  });
+
+  const endDrag = () => {
+    if (!dragging) return;
+    dragging.classList.remove('lu-dragging');
+    L.entries = _lineupEntriesFromDOM();
+    dragging = null;
+  };
+  list.addEventListener('pointerup', endDrag);
+  list.addEventListener('pointercancel', endDrag);
+}
+
 // ── App init ───────────────────────────────────────────────────────────────
 async function launchApp() {
   $('auth-overlay').classList.add('hidden');
@@ -723,6 +937,15 @@ async function launchApp() {
   // Import modal
   $('close-import').addEventListener('click', closeImportModal);
   $('import-modal').querySelector('.modal-bg').addEventListener('click', closeImportModal);
+
+  // Lineup
+  $('lineup-toggle-btn')?.addEventListener('click', () =>
+    switchTab($('app').classList.contains('show-lineup') ? 'editor' : 'lineup')
+  );
+  $('lineup-pick-btn').addEventListener('click', toggleLineupPicker);
+  $('lineup-sync-btn').addEventListener('click', syncLineupToSpotify);
+  $('lineup-save-btn').addEventListener('click', saveLineupNames);
+  initLineupDrag();
 
   // Editor
   $('playlist-name').addEventListener('input', e => {

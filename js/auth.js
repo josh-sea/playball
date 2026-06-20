@@ -18,6 +18,8 @@ const SpotifyAuth = (() => {
     'user-modify-playback-state',
     'playlist-read-private',
     'playlist-read-collaborative',
+    'playlist-modify-public',
+    'playlist-modify-private',
   ].join(' ');
 
   function clientId() { return window.APP_CONFIG?.spotify_client_id || ''; }
@@ -167,6 +169,13 @@ const SpotifyAuth = (() => {
     return (data.items || []).map(i => i.track).filter(t => t?.id);
   }
 
+  async function reorderPlaylist(playlistId, trackUris) {
+    await apiCall(`/playlists/${encodeURIComponent(playlistId)}/tracks`, {
+      method: 'PUT',
+      body: JSON.stringify({ uris: trackUris }),
+    });
+  }
+
   return { login, handleCallback, getToken, isLoggedIn, logout, getUser,
-           search, startPlayback, getUserPlaylists, getPlaylistTracks, apiCall, hasScope };
+           search, startPlayback, getUserPlaylists, getPlaylistTracks, apiCall, hasScope, reorderPlaylist };
 })();

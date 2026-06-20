@@ -94,5 +94,31 @@ const GitHub = (() => {
       .toLowerCase();
   }
 
-  return { getToken, saveToken, clearToken, hasToken, verifyToken, listPlaylists, loadPlaylist, savePlaylist, deletePlaylist };
+  async function saveLineup(playlistId, data, existingSha) {
+    const safeid  = playlistId.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    const path    = `lineups/${safeid}.json`;
+    const content = btoa(unescape(encodeURIComponent(JSON.stringify(data, null, 2))));
+    const body    = { message: `Update lineup: ${data.playlistName || playlistId}`, content, branch: branch() };
+    if (existingSha) {
+      body.sha = existingSha;
+    } else {
+      const existing = await call(`/repos/${owner()}/${repo()}/contents/${path}`);
+      if (existing?.sha) body.sha = existing.sha;
+    }
+    const result = await call(`/repos/${owner()}/${repo()}/contents/${path}`, {
+      method: 'PUT', body: JSON.stringify(body),
+    });
+    return { sha: result?.content?.sha, path };
+  }
+
+  async function loadLineup(playlistId) {
+    const safeid = playlistId.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    const path   = `lineups/${safeid}.json`;
+    const data   = await call(`/repos/${owner()}/${repo()}/contents/${path}`);
+    if (!data) return null;
+    const json   = decodeURIComponent(escape(atob(data.content.replace(/\n/g, ''))));
+    return { lineup: JSON.parse(json), sha: data.sha, path };
+  }
+
+  return { getToken, saveToken, clearToken, hasToken, verifyToken, listPlaylists, loadPlaylist, savePlaylist, deletePlaylist, saveLineup, loadLineup };
 })();
