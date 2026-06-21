@@ -165,9 +165,15 @@ const SpotifyAuth = (() => {
 
   // Returns track objects for a playlist (up to 100 tracks, filters out local files)
   async function getPlaylistTracks(playlistId) {
-    const data = await apiCall(
-      `/playlists/${encodeURIComponent(playlistId)}/tracks?limit=100`
-    );
+    const token = await getToken();
+    const url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&market=from_token`;
+    const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      console.error('[getPlaylistTracks] status:', res.status, 'body:', JSON.stringify(body));
+      throw new Error(body.error?.message || 'Spotify API ' + res.status);
+    }
+    const data = await res.json();
     return (data.items || []).map(i => i.track).filter(t => t?.id);
   }
 

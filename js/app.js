@@ -792,7 +792,12 @@ async function loadLineupPlaylist(playlistId, playlistName) {
     $('lineup-sync-btn').classList.remove('hidden');
     $('lineup-save-btn').classList.toggle('hidden', !GitHub.hasToken());
   } catch (e) {
-    $('lineup-list').innerHTML = `<p class="hint" style="padding:28px 20px;color:var(--danger)">Error: ${esc(e.message)}</p>`;
+    const isPrivate = (e.message || '').toLowerCase().includes('forbidden');
+    $('lineup-list').innerHTML = `
+      <p class="hint" style="padding:28px 20px;color:var(--danger)">
+        Error: ${esc(e.message)}<br>
+        ${isPrivate ? '<span style="color:var(--muted);font-size:12px">This playlist may be private or inaccessible — try a different one, or make the playlist public in Spotify first.</span>' : ''}
+      </p>`;
   }
 }
 
