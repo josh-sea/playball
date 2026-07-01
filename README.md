@@ -1,5 +1,15 @@
 # Timed Playlist Editor
 
+> **🚚 This app has moved!** Playball now lives in the
+> [`josh-sea/joshcocciardi`](https://github.com/josh-sea/joshcocciardi) monorepo
+> (`apps/playball`) and is hosted at
+> **[joshcocciardi.com/projects/playball](https://www.joshcocciardi.com/projects/playball)**.
+> The new version signs in with Google or email (Firebase) instead of a GitHub
+> token, stores playlists in Firestore, and syncs playlist order back to
+> Spotify. This repo is kept for the legacy GitHub Pages deployment and the
+> saved playlist JSON files (which the new app can import).
+
+
 A GitHub Pages web app that lets anyone log into their Spotify account, search songs, and build playlists where each track plays from a specific **start time** to a specific **stop time**. Playlists are saved as JSON files in this repo under `playlists/{spotify-user-id}/`.
 
 ## Live site
